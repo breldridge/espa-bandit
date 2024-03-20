@@ -63,6 +63,8 @@ class Agent():
         elif market_type == 'RTM':
             offer = self._real_time_offer()
 
+        #TODO: check if we need to clean up offers into maximum of 10 bins
+
         # Then save the result
         self._save_json(offer, f'offer_{self.step}')
 
@@ -73,7 +75,7 @@ class Agent():
 
     def _day_ahead_offer(self):
         # Make the offer curves and unload into arrays
-        prices = self.market["previous"]["prices"]["EN"]
+        prices = self.market["previous"]["prices"]["EN"] #TODO check 'previous' keys
         self._calculate_offer_curve(prices)
         self._format_offer_curve()
 
@@ -111,6 +113,7 @@ class Agent():
         schedule_to_tomorrow = self._process_efficiency(schedule_to_tomorrow)
         soc_estimate = self.resource['status'][self.rid]['soc'] - sum(schedule_to_tomorrow)
         soc_estimate = min(self.socmax, max(soc_estimate, self.socmin))
+        dispatch_estimate = self.resource['schedule'][self.rid]['EN'][t_init]
 
         # Package the dictionaries into an output formatted dictionary
         offer_out_dict = {self.rid: {}}
@@ -118,7 +121,7 @@ class Agent():
                                "block_dc_mq": block_dc_mq, "block_soc_mc": block_soc_mc, "block_soc_mq": block_soc_mq}
         offer_out_dict[self.rid].update(self._default_reserve_offer())
         offer_out_dict[self.rid].update(self._default_dispatch_capacity())
-        offer_out_dict[self.rid].update(self._default_offer_constants(soc_begin=soc_estimate))
+        offer_out_dict[self.rid].update(self._default_offer_constants(soc_begin=soc_estimate, init_en=dispatch_estimate))
 
         self.formatted_offer = offer_out_dict
 
@@ -162,6 +165,7 @@ class Agent():
                     soc_headroom += mq
                     block_dc_mq[t_now].append(mq)
                     block_dc_mc[t_now].append(mc)
+            #TODO: add ch/dc blocks for additional ch/dc
 
             # add blocks for soc available/headroom
             ledger_list = [tup for sublist in en_ledger.values() for tup in sublist]
