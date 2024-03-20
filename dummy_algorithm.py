@@ -75,7 +75,9 @@ class Agent():
 
     def _day_ahead_offer(self):
         # Make the offer curves and unload into arrays
-        prices = self.market["previous"]["prices"]["EN"] #TODO check 'previous' keys
+        # type = self.market['market_type']
+        type = self.market['uid'][:5]
+        prices = self.market["previous"][type]["prices"]["EN"]
         self._calculate_offer_curve(prices)
         self._format_offer_curve()
 
@@ -106,8 +108,11 @@ class Agent():
             block_soc_mq[required_times[i]] = 0
 
         # estimate initial SoC for tomorrow's DAM
-        t_now = self.market['current_time'] #TODO: add to market_data
-        t_init = self.market['timestamps'][0]
+        t_init = datetime.datetime.strptime(self.market['timestamps'][0],'%Y%m%d%H%M')
+        #t_now = self.market['current_time']
+        t_now = t_init - datetime.timedelta(hours=15) #TODO: switch back once above in included in market_data
+        t_init = t_init.strftime('%Y%m%d%H%M')
+        t_now = t_now.strftime('%Y%m%d%H%M')
         schedule = self.resource['schedule'][self.rid]['EN']
         schedule_to_tomorrow = [q for t,q in schedule if t_now <= t < t_init]
         schedule_to_tomorrow = self._process_efficiency(schedule_to_tomorrow)
@@ -147,7 +152,7 @@ class Agent():
 
         t_end = self.market['timestamps'][-1]
         for t_now in self.market['timestamps']:
-            en_ledger = {t:order for t,order in resource_info['ledger'][self.rid]['EN'] if t >= t_now} #TODO: check if datetime format allows '>=' comparison
+            en_ledger = {t:order for t,order in resource_info['ledger'][self.rid]['EN'] if t >= t_now}
             block_ch_mq[t_now] = []
             block_ch_mc[t_now] = []
             block_dc_mq[t_now] = []
@@ -165,7 +170,6 @@ class Agent():
                     soc_headroom += mq
                     block_dc_mq[t_now].append(mq)
                     block_dc_mc[t_now].append(mc)
-            #TODO: add ch/dc blocks for additional ch/dc
 
             # add blocks for soc available/headroom
             ledger_list = [tup for sublist in en_ledger.values() for tup in sublist]
@@ -269,9 +273,10 @@ class Agent():
     def _load_dam_prices_times(self):
         now = self.market['timestamps'][0]
         hour_beginning = now[:10] + '00'
-        if hour_beginning in self.market['previous']['timestamp']:
-            prices = self.market['previous']['EN']
-            times = self.market['previous']['timestamp']
+        type = self.market['market_type']
+        if hour_beginning in self.market['previous'][type]['timestamp']:
+            prices = self.market['previous'][type]['EN']
+            times = self.market['previous'][type]['timestamp']
         else:
             with open(self._prev_dam_file, "r") as file:
                 prices = json.load(file)
