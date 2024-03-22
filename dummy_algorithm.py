@@ -167,14 +167,14 @@ class Agent():
 
         t_end = self.market['timestamps'][-1]
         for t_now in self.market['timestamps']:
-            en_ledger = {t:order for t,order in self.resource['ledger'][self.rid]['EN'] if t >= t_now}
+            en_ledger = {t:order for t,order in self.resource['ledger'][self.rid]['EN'].items() if t >= t_now}
             block_ch_mq[t_now] = []
             block_ch_mc[t_now] = []
             block_dc_mq[t_now] = []
             block_dc_mc[t_now] = []
 
             # add blocks for cost of current dispatch:
-            for mq, mc in self.resource['ledger'][self.rid]['EN'][t_now]:
+            for mq, mc in self.resource['ledger'][self.rid]['EN'][t_now].items():
                 if mq < 0:
                     soc_available += mq * self.efficiency
                     soc_headroom -= mq * self.efficiency
@@ -222,7 +222,7 @@ class Agent():
                 block_dc_mc[t_now].append(self.price_ceiling)
 
         # valuation of post-horizon SoC
-        post_market_ledger = {t: order for t, order in self.resource['ledger'][self.rid]['EN'] if t > t_end}
+        post_market_ledger = {t: order for t, order in self.resource['ledger'][self.rid]['EN'].items() if t > t_end}
         post_market_list = [tup for sublist in post_market_ledger.values() for tup in sublist]
         post_market_sorted = sorted(post_market_list, key=lambda tup:tup[1], reverse=True)
         block_soc_mq[t_end] = []
