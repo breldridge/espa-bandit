@@ -1,5 +1,6 @@
 # This is a test dummy algorithm to get the opportunity cost curves
 from ortools.linear_solver import pywraplp
+import offer_utils as ou
 import pandas as pd
 import numpy as np
 import argparse
@@ -52,6 +53,9 @@ class Agent():
         self.price_ceiling = 999
         self.price_floor = 0
 
+        # Add the offer binner
+        self.binner = ou.Binner(output_type='lists')
+
         self._prev_dam_file = 'prev_day_ahead_market'
         self.save_from_previous()
 
@@ -79,11 +83,12 @@ class Agent():
         type = self.market['uid'][:5]
         prices = self.market["previous"][type]["prices"]["EN"]
         self._calculate_offer_curve(prices)
-        self._format_offer_curve()
+        self._descretize_offer_curves()
+        self._format_offer_curves()
 
         return self.formatted_offer
 
-    def _format_offer_curve(self, required_times):
+    def _format_offer_curves(self):
         # Offer parsing script below:
         required_times = [t for t in self.market['timestamps']]
 
@@ -129,6 +134,14 @@ class Agent():
         offer_out_dict[self.rid].update(self._default_offer_constants(soc_begin=soc_estimate, init_en=dispatch_estimate))
 
         self.formatted_offer = offer_out_dict
+
+    def _descretize_offer_curves(self):
+        charge_offer = self.binner.collate(self.charge_mq, self.charge_mc)
+        discharge_offer = self.binner.collate(self.discharge_mq, self.discharge_mc)
+        self.charge_mq = charge_offer[0]
+        self.charge_mc = charge_offer[1]
+        self.discharge_mq = discharge_offer[0]
+        self.discharge_mc = discharge_offer[1]
 
     def _process_efficiency(self, data:list):
         processed_data = []
