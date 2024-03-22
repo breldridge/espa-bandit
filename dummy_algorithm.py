@@ -174,17 +174,18 @@ class Agent():
             block_dc_mc[t_now] = []
 
             # add blocks for cost of current dispatch:
-            for mq, mc in self.resource['ledger'][self.rid]['EN'][t_now].items():
-                if mq < 0:
-                    soc_available += mq * self.efficiency
-                    soc_headroom -= mq * self.efficiency
-                    block_ch_mq[t_now].append(-mq)
-                    block_ch_mc[t_now].append(mc)
-                elif mq > 0:
-                    soc_available -= mq
-                    soc_headroom += mq
-                    block_dc_mq[t_now].append(mq)
-                    block_dc_mc[t_now].append(mc)
+            if t_now in en_ledger.keys():
+                for mq, mc in en_ledger[t_now]:
+                    if mq < 0:
+                        soc_available += mq * self.efficiency
+                        soc_headroom -= mq * self.efficiency
+                        block_ch_mq[t_now].append(-mq)
+                        block_ch_mc[t_now].append(mc)
+                    elif mq > 0:
+                        soc_available -= mq
+                        soc_headroom += mq
+                        block_dc_mq[t_now].append(mq)
+                        block_dc_mc[t_now].append(mc)
 
             # add blocks for soc available/headroom
             ledger_list = [tup for sublist in en_ledger.values() for tup in sublist]
