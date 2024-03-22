@@ -62,10 +62,12 @@ class Agent():
     def make_me_an_offer(self):
         # Read in information from the market
         market_type = self.market["market_type"]
-        if market_type == 'DAM':
+        if 'DAM' in market_type:
             offer = self._day_ahead_offer()
-        elif market_type == 'RTM':
+        elif 'RTM' in market_type:
             offer = self._real_time_offer()
+        else:
+            raise ValueError(f"Unable to find offer function for market_type={market_type}")
 
         #TODO: check if we need to clean up offers into maximum of 10 bins
 
