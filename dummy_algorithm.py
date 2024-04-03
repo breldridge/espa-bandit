@@ -87,7 +87,6 @@ class Agent():
         self._calculate_offer_curve(prices)
         self._descretize_offer_curves()
         self._format_offer_curves()
-        self.formatted_offer['oc'] = self._oc
 
         return self.formatted_offer
 
@@ -306,34 +305,33 @@ class Agent():
         with open(f'offer_{self.step}.json', 'w') as f:
             json.dump(save_dict, f, indent=4, cls=NpEncoder)
 
-    def _calculate_opportunity_costs(self, prices):
-
-        self._scheduler(prices)
+    def _calculate_opportunity_costs(self, prices, charge_list, discharge_list):
 
         # combine the charge/discharge list
-        combined_list = [dis - ch for ch, dis in zip(self._charge_list, self._discharge_list)]
+        combined_list = [dis - ch for ch, dis in zip(charge_list, discharge_list)]
+        time = self.market['timestamps']
+        schedule = dict(zip(time, combined_list))
 
         # finding the index for first charge and last discharge
-        t1_ch = next((index for index, value in enumerate(combined_list) if value < 0), None)
-        t_last_dis = next((index for index in range(len(combined_list) - 1, -1, -1) if combined_list[index] > 0), None)
+        t1_ch = next((index for index, value in schedule.items() if value < 0), None)
+        t_last_dis = next((time[i] for i in range(len(combined_list) - 1, -1, -1) if combined_list[i] > 0), None)
 
         # create two list for charging/discharging opportunity costs
-        self._oc_dis_list = []
-        self._oc_ch_list = []
+        charge_list = []
+        discharge_list = []
 
-        opportunity_costs = pd.DataFrame(None, index=range(len(prices)), columns=['Time', 'charge cost', 'disch cost'])
-        soc = pd.DataFrame(None, index=range(len(prices) + 1), columns=['Time', 'SOC'])
+        # opportunity_costs = pd.DataFrame(None, index=range(len(prices)), columns=['Time', 'charge cost', 'disch cost'])
+        # soc = pd.DataFrame(None, index=range(len(prices) + 1), columns=['Time', 'SOC'])
 
 
-        for index, row in opportunity_costs.iterrows():
+        for index, value in schedule.items():
             i = index
-            row['Time'] = index
 
             # charging
-            if combined_list[i] < 0:
+            if value < 0:
                 oc_ch, oc_dis = self._calc_oc_charge(combined_list, prices, i)
             # discharging
-            elif combined_list[i] > 0:
+            elif value > 0:
                 oc_ch, oc_dis = self._calc_oc_discharge(combined_list, prices, i)
             else:
                 # before first charge
@@ -347,28 +345,24 @@ class Agent():
                     oc_ch, oc_dis = self._calc_oc_between_cycles(combined_list, prices, i)
 
             # save to list
-            self._oc_ch_list.append(oc_ch)
-            self._oc_dis_list.append(oc_dis)
-            # save to dataframe
-            row['charge cost'] = oc_ch
-            row['disch cost'] = oc_dis
+            charge_list.append(oc_ch)
+            discharge_list.append(oc_dis)
 
-        return opportunity_costs
+        return charge_list, discharge_list
 
     def _calculate_offer_curve(self, prices):
 
         # marginal cost comes from opportunity cost calculation
-        oc = self._calculate_opportunity_costs(prices)
-        #self._save_json(oc, 'oc')
-        self._oc = oc
+        charge_mq, discharge_mq = self._scheduler(prices)
+        charge_mc, discharge_mc = self._calculate_opportunity_costs(prices, charge_mq, discharge_mq)
         # self.charge_mc = oc['charge cost'].values
         # self.discharge_mc = oc['disch cost'].values
-        self.charge_mc = self._oc_ch_list
-        self.discharge_mc = self._oc_dis_list
+        self.charge_mc = charge_mc
+        self.discharge_mc = discharge_mc
 
         # marginal quantities from scheduler values
-        self.charge_mq = self._charge_list
-        self.discharge_mq = self._discharge_list
+        self.charge_mq = charge_mq
+        self.discharge_mq = discharge_mq
 
     def _calc_oc_charge(self, combined_list, prices, idx):
         # opportunity cost during scheduled charge
@@ -444,13 +438,14 @@ class Agent():
         solver.Solve()
         #print("Solution:")
         #print("The Storage's profit =", solver.Objective().Value())
-        self._charge_list=[]
-        self._discharge_list=[]
+        charge_list = []
+        discharge_list = []
         dasoc_list=[]
         for i in range(number_step):
-            self._charge_list.append(charge[i].solution_value())
-            self._discharge_list.append(discharge[i].solution_value())
+            charge_list.append(charge[i].solution_value())
+            discharge_list.append(discharge[i].solution_value())
             #dasoc_list.append(dasoc[i].solution_value())
+        return charge_list, discharge_list
 
 
 if __name__ == '__main__':
