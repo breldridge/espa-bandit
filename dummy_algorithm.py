@@ -358,8 +358,11 @@ class Agent():
 
         # marginal cost comes from opportunity cost calculation
         oc = self._calculate_opportunity_costs(prices)
-        self.charge_mc = oc['charge cost'].values
-        self.discharge_mc = oc['disch cost'].values
+        self._save_json(oc, 'oc')
+        # self.charge_mc = oc['charge cost'].values
+        # self.discharge_mc = oc['disch cost'].values
+        self.charge_mc = self._oc_ch_list
+        self.discharge_mc = self._oc_dis_list
 
         # marginal quantities from scheduler values
         self.charge_mq = self._charge_list
@@ -422,7 +425,7 @@ class Agent():
         # Create the linear solver with the GLOP backend.
         solver = pywraplp.Solver.CreateSolver("GLOP")
         if not solver:
-            return
+            raise ImportError("Scheduler unable to load solver.")
         # [END solver]
 
         #Variables: all are continous
