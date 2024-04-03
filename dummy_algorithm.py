@@ -80,7 +80,9 @@ class Agent():
     def _day_ahead_offer(self):
         # Make the offer curves and unload into arrays
         type = self.market['market_type']
-        prices = self.market["previous"][type]["prices"]["EN"]
+        bus = self.resource['bus'] #TODO: switch when this is updated
+        bus = 'NEVP'
+        prices = self.market["previous"][type]["prices"]["EN"][bus]
         self._calculate_offer_curve(prices)
         self._descretize_offer_curves()
         self._format_offer_curves()
