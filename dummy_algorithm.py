@@ -14,6 +14,7 @@ socmin = 128
 chmax = 125
 dcmax = 125
 efficiency = 0.892
+duration_minutes = 5
 
 class NpEncoder(json.JSONEncoder):
     def default(self, obj):
@@ -41,6 +42,8 @@ class Agent():
         self.market = market_info
         self.resource = resource_info
         self.rid = resource_info['rid']
+
+        self.duration_minutes = duration_minutes
 
         # Standard battery parameters
         self.socmax = socmax
@@ -115,16 +118,21 @@ class Agent():
 
         # estimate initial SoC for tomorrow's DAM
         t_init = datetime.datetime.strptime(self.market['timestamps'][0],'%Y%m%d%H%M')
-        t_now = self.market['current_time']
-        #t_now = t_init - datetime.timedelta(hours=15) #TODO: switch back once above in included in market_data
+        # t_now = datetime.datetime.strptime(self.market['current_time'],'%Y%m%d%H%M') #TODO: switch back once above in included in market_data
+        t_now = datetime.datetime.strptime(self.market['current_time'][5:],'%Y%m%d%H%M')
         t_init = t_init.strftime('%Y%m%d%H%M')
         t_now = t_now.strftime('%Y%m%d%H%M')
-        schedule = self.resource['schedule'][self.rid]['EN']
-        schedule_to_tomorrow = [q for t,q in schedule if t_now <= t < t_init]
-        schedule_to_tomorrow = self._process_efficiency(schedule_to_tomorrow)
-        soc_estimate = self.resource['status'][self.rid]['soc'] - sum(schedule_to_tomorrow)
+        if self.resource['schedule'].keys():
+            schedule = self.resource['schedule'][self.rid]['EN']
+            schedule_to_tomorrow = [q for t,q in schedule if t_now <= t < t_init]   # these may be misordered but that is OK
+            schedule_to_tomorrow = self._process_efficiency(schedule_to_tomorrow)
+            soc_estimate = self.resource['status'][self.rid]['soc'] - sum(schedule_to_tomorrow) * self.duration_minutes / 60
+            dispatch_estimate = self.resource['schedule'][self.rid]['EN'][t_init]
+        else:
+            soc_estimate = self.resource['status'][self.rid]['soc']
+            dispatch_estimate = 0
         soc_estimate = min(self.socmax, max(soc_estimate, self.socmin))
-        dispatch_estimate = self.resource['schedule'][self.rid]['EN'][t_init]
+
 
         # Package the dictionaries into an output formatted dictionary
         offer_out_dict = {self.rid: {}}
@@ -315,10 +323,10 @@ class Agent():
         schedule = dict(zip(time, combined_list))
 
         # finding the index for first charge and last discharge
-        t1_ch = next((index for index, value in schedule.items() if value < 0), None)
-        t_last_dis = next((time[i] for i in range(len(combined_list) - 1, -1, -1) if combined_list[i] > 0), None)
-        assert t1_ch in self.market['timestamps'], "t1_ch not in self.market['timestamps']"
-        assert t_last_dis in self.market['timestamps'], "t_last_dis not in self.market['timestamps']"
+        t1_ch = next((index for index, key in enumerate(schedule) if schedule[key] < 0), None)
+        t_last_dis = next((i for i in range(len(combined_list) - 1, -1, -1) if combined_list[i] > 0), None)
+        assert isinstance(t1_ch, int), "t1_ch is not an int"
+        assert isinstance(t_last_dis, int), "t_last_dis is not an int"
 
         # create two list for charging/discharging opportunity costs
         charge_list = []
@@ -327,8 +335,9 @@ class Agent():
         # opportunity_costs = pd.DataFrame(None, index=range(len(prices)), columns=['Time', 'charge cost', 'disch cost'])
         # soc = pd.DataFrame(None, index=range(len(prices) + 1), columns=['Time', 'SOC'])
 
-        for index, value in schedule.items():
+        for index, key in enumerate(schedule):
             i = index
+            value = schedule[key]
 
             # charging
             if value < 0:
@@ -376,8 +385,8 @@ class Agent():
         oc_ch = min(prices[1:j], self.efficiency * prices[j]) if idx == 0 else min(np.delete(prices[0:j], idx).min(),
                                                                                  self.efficiency * prices[j])
 
-        arr1 = prices[0] if idx == 0 else prices[0:idx].min()
-        arr2 = 0 if j == idx + 1 else prices[idx + 1] if j == idx + 2 else prices[(idx + 1):j].min()
+        arr1 = prices[0] if idx == 0 else min(prices[0:idx])
+        arr2 = 0 if j == idx + 1 else prices[idx + 1] if j == idx + 2 else min(prices[(idx + 1):j])
         oc_dis = oc_ch + 0.01 if idx == 0 else (-prices[idx] + arr1 + arr2) / self.efficiency
 
         return oc_ch, oc_dis
@@ -385,14 +394,14 @@ class Agent():
     def _calc_oc_discharge(self, combined_list, prices, idx):
         # opportunity cost during scheduled discharge
         j = max((index for index, value in enumerate(combined_list[:idx]) if value < 0), default=None)
-        arr1 = 0 if idx == len(prices) else prices[idx + 1] if idx == len(prices) - 1 else prices[(idx + 1):].max()
-        arr2 = 0 if j == idx - 1 else prices[j + 1] if j == idx - 2 else prices[(j + 1):idx].max()
+        arr1 = 0 if idx == len(prices) else prices[idx + 1] if idx == len(prices) - 1 else max(prices[(idx + 1):])
+        arr2 = 0 if j == idx - 1 else prices[j + 1] if j == idx - 2 else max(prices[(j + 1):idx])
         oc_ch = (-prices[idx] + arr1 + arr2) * self.efficiency
-        oc_dis = max(prices[j] / self.efficiency, prices[(j + 1):].max())
+        oc_dis = max(prices[j] / self.efficiency, max(prices[(j + 1):]))
 
         return oc_ch, oc_dis
 
-    def _calc_oc_before_first_charge(self, prices, t1_idx, idx):
+    def _calc_oc_before_first_charge(self, prices, t1_idx:int, idx:int):
         # opportunity cost before first charge
         max_ch = 0 if idx == t1_idx - 1 else prices[idx + 1] if idx == t1_idx - 2 else prices[(idx + 1):t1_idx].max()
         oc_ch = max(max_ch * self.efficiency, prices[t1_idx])
@@ -402,10 +411,10 @@ class Agent():
 
     def _calc_oc_after_last_discharge(self, prices, t_last, idx):
         # opportunity cost after last discharge
-        oc_ch = prices[(idx + 1):].max() * self.efficiency if idx < len(prices) - 2 else prices[idx + 1] if idx == len(
-            prices) - 2 else np.min(prices)
-        arr = prices[idx - 1] if idx == t_last + 2 else prices[(t_last + 1):idx] if idx > t_last + 2 else np.max(prices)
-        oc_dis = min(prices[t_last], arr.min() / self.efficiency)
+        oc_ch = max(prices[(idx + 1):]) * self.efficiency if idx < len(prices) - 2 else prices[idx + 1] if idx == len(
+            prices) - 2 else min(prices)
+        arr = prices[idx - 1] if idx == t_last + 2 else min(prices[(t_last + 1):idx]) if idx > t_last + 2 else max(prices)
+        oc_dis = min(prices[t_last], arr / self.efficiency)
 
         return oc_ch, oc_dis
 
@@ -413,10 +422,10 @@ class Agent():
         j_next = idx + 1 + next((index for index, value in enumerate(combined_list[idx + 1:]) if value > 0),None)
         j_prev = max((index for index, value in enumerate(combined_list[:idx]) if value < 0), default=None)
         oc_ch = 0 if idx < j_prev + 2 else prices[idx - 1] if idx == j_prev + 2 else max(
-            prices[(j_prev + 1):idx].max() * self.efficiency, prices[j_prev])
+            max(prices[(j_prev + 1):idx]) * self.efficiency, prices[j_prev])
         oc_dis = 0 if idx > j_next - 2 else min(prices[j_next],
                                               prices[idx + 1] / self.efficiency) if idx == j_next - 2 else min(
-            prices[j_next], prices[(idx + 1):j_next].min() / self.efficiency)
+            prices[j_next], min(prices[(idx + 1):j_next]) / self.efficiency)
 
         return oc_ch, oc_dis
 
