@@ -289,8 +289,9 @@ class Agent():
         now = self.market['timestamps'][0]
         hour_beginning = now[:10] + '00'
         type = self.market['market_type']
+        bus = self.resource['bus']
         if hour_beginning in self.market['previous'][type]['timestamp']:
-            prices = self.market['previous'][type]['EN']
+            prices = self.market['previous'][type]['EN'][bus]
             times = self.market['previous'][type]['timestamp']
         else:
             with open(self._prev_dam_file, "r") as file:
