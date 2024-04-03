@@ -297,9 +297,11 @@ class Agent():
                 prices = [value for value in prices.values()]
         return prices, times
 
-    def _save_json(self, save_dict, filename):
+    def _save_json(self, save_dict, filename=None):
         # Save as json file in the current directory with name offer_{time_step}.json
-        with open(f'offer_{self.step}.json', 'w') as f:
+        if filename is None:
+            filename =f'offer_{self.step}.json'
+        with open(filename, 'w') as f:
             json.dump(save_dict, f, indent=4, cls=NpEncoder)
 
     def _calculate_opportunity_costs(self, prices, charge_mq, discharge_mq):
