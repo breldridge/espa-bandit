@@ -69,8 +69,6 @@ class Agent():
         else:
             raise ValueError(f"Unable to find offer function for market_type={market_type}")
 
-        #TODO: check if we need to clean up offers into maximum of 10 bins
-
         # Then save the result
         self._save_json(offer, f'offer_{self.step}')
 
@@ -81,8 +79,7 @@ class Agent():
 
     def _day_ahead_offer(self):
         # Make the offer curves and unload into arrays
-        # type = self.market['market_type']
-        type = self.market['uid'][:5]
+        type = self.market['market_type']
         prices = self.market["previous"][type]["prices"]["EN"]
         self._calculate_offer_curve(prices)
         self._descretize_offer_curves()
@@ -116,8 +113,8 @@ class Agent():
 
         # estimate initial SoC for tomorrow's DAM
         t_init = datetime.datetime.strptime(self.market['timestamps'][0],'%Y%m%d%H%M')
-        #t_now = self.market['current_time']
-        t_now = t_init - datetime.timedelta(hours=15) #TODO: switch back once above in included in market_data
+        t_now = self.market['current_time']
+        #t_now = t_init - datetime.timedelta(hours=15) #TODO: switch back once above in included in market_data
         t_init = t_init.strftime('%Y%m%d%H%M')
         t_now = t_now.strftime('%Y%m%d%H%M')
         schedule = self.resource['schedule'][self.rid]['EN']
@@ -305,16 +302,18 @@ class Agent():
         with open(f'offer_{self.step}.json', 'w') as f:
             json.dump(save_dict, f, indent=4, cls=NpEncoder)
 
-    def _calculate_opportunity_costs(self, prices, charge_list, discharge_list):
+    def _calculate_opportunity_costs(self, prices, charge_mq, discharge_mq):
 
         # combine the charge/discharge list
-        combined_list = [dis - ch for ch, dis in zip(charge_list, discharge_list)]
+        combined_list = [dis - ch for ch, dis in zip(charge_mq, discharge_mq)]
         time = self.market['timestamps']
         schedule = dict(zip(time, combined_list))
 
         # finding the index for first charge and last discharge
         t1_ch = next((index for index, value in schedule.items() if value < 0), None)
         t_last_dis = next((time[i] for i in range(len(combined_list) - 1, -1, -1) if combined_list[i] > 0), None)
+        assert t1_ch in self.market['timestamps'], "t1_ch not in self.market['timestamps']"
+        assert t_last_dis in self.market['timestamps'], "t_last_dis not in self.market['timestamps']"
 
         # create two list for charging/discharging opportunity costs
         charge_list = []
@@ -322,7 +321,6 @@ class Agent():
 
         # opportunity_costs = pd.DataFrame(None, index=range(len(prices)), columns=['Time', 'charge cost', 'disch cost'])
         # soc = pd.DataFrame(None, index=range(len(prices) + 1), columns=['Time', 'SOC'])
-
 
         for index, value in schedule.items():
             i = index
@@ -347,6 +345,9 @@ class Agent():
             # save to list
             charge_list.append(oc_ch)
             discharge_list.append(oc_dis)
+
+        assert sum(abs(c) for c in charge_list) > 0, "calc_oc: charge list has no values"
+        assert sum(abs(d) for d in discharge_list) > 0, "calc_oc: discharge list has no values"
 
         return charge_list, discharge_list
 
@@ -445,6 +446,10 @@ class Agent():
             charge_list.append(charge[i].solution_value())
             discharge_list.append(discharge[i].solution_value())
             #dasoc_list.append(dasoc[i].solution_value())
+
+        assert sum(abs(c) for c in charge_list) > 0, "scheduler: charge list has no values"
+        assert sum(abs(d) for d in discharge_list) > 0, "scheduler: discharge list has no values"
+
         return charge_list, discharge_list
 
 
