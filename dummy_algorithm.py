@@ -87,6 +87,7 @@ class Agent():
         self._calculate_offer_curve(prices)
         self._descretize_offer_curves()
         self._format_offer_curves()
+        self.formatted_offer['oc'] = self._oc
 
         return self.formatted_offer
 
@@ -358,7 +359,8 @@ class Agent():
 
         # marginal cost comes from opportunity cost calculation
         oc = self._calculate_opportunity_costs(prices)
-        self._save_json(oc, 'oc')
+        #self._save_json(oc, 'oc')
+        self._oc = oc
         # self.charge_mc = oc['charge cost'].values
         # self.discharge_mc = oc['disch cost'].values
         self.charge_mc = self._oc_ch_list
