@@ -391,11 +391,11 @@ class Agent():
             else:
                 arr2 = min(prices[(idx + 1):j])
         if idx == 0:
-            oc_ch = min(prices[1:j], self.efficiency * prices[j])
+            oc_ch = min(min(prices[1:j]), self.efficiency * prices[j])
             arr1 = prices[0]
             oc_dis = oc_ch + 0.01
         else:
-            oc_ch = min(np.delete(prices[0:j], idx).min(), self.efficiency * prices[j])
+            oc_ch = min(np.delete(np.array(prices[0:j]), idx).min(), self.efficiency * prices[j])
             arr1 = min(prices[0:idx])
             oc_dis = (-prices[idx] + arr1 + arr2) / self.efficiency
 
@@ -413,9 +413,9 @@ class Agent():
 
     def _calc_oc_before_first_charge(self, prices, t1_idx:int, idx:int):
         # opportunity cost before first charge
-        max_ch = 0 if idx == t1_idx - 1 else prices[idx + 1] if idx == t1_idx - 2 else prices[(idx + 1):t1_idx].max()
+        max_ch = 0 if idx == t1_idx - 1 else prices[idx + 1] if idx == t1_idx - 2 else max(prices[(idx + 1):t1_idx])
         oc_ch = max(max_ch * self.efficiency, prices[t1_idx])
-        oc_dis = oc_ch + 0.01 if idx == 0 else prices[0] / self.efficiency if idx == 1 else prices[0:idx].min() / self.efficiency
+        oc_dis = oc_ch + 0.01 if idx == 0 else prices[0] / self.efficiency if idx == 1 else min(prices[0:idx]) / self.efficiency
 
         return oc_ch, oc_dis
 
