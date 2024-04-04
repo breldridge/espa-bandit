@@ -104,7 +104,7 @@ class Agent():
             # add the charge offer curve
             mc = mc_list[i]
             mq = mq_list[i]
-            if isinstance(mc, float) and isinstance(mq, float):
+            if isinstance(mc, (int,float)) and isinstance(mq, (int,float)):
                 mq_dict[time] = mq
                 mc_dict[time] = mc
             elif isinstance(mc, list) and isinstance(mq, list):
