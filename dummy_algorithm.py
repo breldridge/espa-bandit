@@ -385,11 +385,11 @@ class Agent():
 
         if j == idx + 1:
             arr2 = 0
+        elif j == idx + 2:
+            arr2 = prices[idx + 1]
         else:
-            if j == idx + 2:
-                arr2 = prices[idx + 1]
-            else:
-                arr2 = min(prices[(idx + 1):j])
+            arr2 = min(prices[(idx + 1):j])
+
         if idx == 0:
             oc_ch = min(min(prices[1:j]), self.efficiency * prices[j])
             arr1 = prices[0]
@@ -404,8 +404,23 @@ class Agent():
     def _calc_oc_discharge(self, combined_list, prices, idx):
         # opportunity cost during scheduled discharge
         j = max((index for index, value in enumerate(combined_list[:idx]) if value < 0), default=None)
-        arr1 = 0 if idx == len(prices) else prices[idx + 1] if idx == len(prices) - 1 else max(prices[(idx + 1):])
-        arr2 = 0 if j == idx - 1 else prices[j + 1] if j == idx - 2 else max(prices[(j + 1):idx])
+
+        # arr1
+        if idx == len(prices):
+            arr1 = 0
+        elif idx == len(prices) - 1:
+            arr1 = prices[idx - 1]
+        else:
+            arr1 = max(prices[(idx - 1):])
+
+        # arr2
+        if j == idx - 1:
+            arr2 = 0
+        elif j == idx - 2:
+            arr2 = prices[j - 1]
+        else:
+            arr2 = max(prices[(j - 1):idx])
+
         oc_ch = (-prices[idx] + arr1 + arr2) * self.efficiency
         oc_dis = max(prices[j] / self.efficiency, max(prices[(j + 1):]))
 
@@ -413,17 +428,38 @@ class Agent():
 
     def _calc_oc_before_first_charge(self, prices, t1_idx:int, idx:int):
         # opportunity cost before first charge
-        max_ch = 0 if idx == t1_idx - 1 else prices[idx + 1] if idx == t1_idx - 2 else max(prices[(idx + 1):t1_idx])
+        if idx == t1_idx - 1:
+            max_ch = 0
+        elif idx == t1_idx:
+            max_ch = prices[idx + 1]
+        else:
+            max_ch = max(prices[(idx + 1):t1_idx])
         oc_ch = max(max_ch * self.efficiency, prices[t1_idx])
-        oc_dis = oc_ch + 0.01 if idx == 0 else prices[0] / self.efficiency if idx == 1 else min(prices[0:idx]) / self.efficiency
+
+        if idx == 0:
+            oc_dis = oc_ch + 0.01
+        elif idx == 1:
+            oc_dis = prices[0] / self.efficiency
+        else:
+            oc_dis = min(prices[0:idx]) / self.efficiency
 
         return oc_ch, oc_dis
 
     def _calc_oc_after_last_discharge(self, prices, t_last, idx):
         # opportunity cost after last discharge
-        oc_ch = max(prices[(idx + 1):]) * self.efficiency if idx < len(prices) - 2 else prices[idx + 1] if idx == len(
-            prices) - 2 else min(prices)
-        arr = prices[idx - 1] if idx == t_last + 2 else min(prices[(t_last + 1):idx]) if idx > t_last + 2 else max(prices)
+        if idx < len(prices) - 2:
+            oc_ch = max(prices[(idx + 1):]) * self.efficiency
+        elif idx == len(prices) - 2:
+            oc_ch = prices[idx + 1]
+        else:
+            oc_ch = min(prices)
+
+        if idx == t_last + 2:
+            arr = prices[idx - 1]
+        elif idx > t_last + 2:
+            arr = min(prices[(t_last + 1):idx])
+        else:
+            arr = max(prices)
         oc_dis = min(prices[t_last], arr / self.efficiency)
 
         return oc_ch, oc_dis
@@ -431,11 +467,20 @@ class Agent():
     def _calc_oc_between_cycles(self, combined_list, prices, idx):
         j_next = idx + 1 + next((index for index, value in enumerate(combined_list[idx + 1:]) if value > 0),None)
         j_prev = max((index for index, value in enumerate(combined_list[:idx]) if value < 0), default=None)
-        oc_ch = 0 if idx < j_prev + 2 else prices[idx - 1] if idx == j_prev + 2 else max(
-            max(prices[(j_prev + 1):idx]) * self.efficiency, prices[j_prev])
-        oc_dis = 0 if idx > j_next - 2 else min(prices[j_next],
-                                              prices[idx + 1] / self.efficiency) if idx == j_next - 2 else min(
-            prices[j_next], min(prices[(idx + 1):j_next]) / self.efficiency)
+
+        if idx < j_prev + 2:
+            oc_ch = 0
+        elif idx == j_prev + 2:
+            oc_ch = prices[idx - 1]
+        else:
+            oc_ch = max(max(prices[(j_prev + 1):idx]) * self.efficiency, prices[j_prev])
+
+        if idx > j_next - 2:
+            oc_dis = 0
+        elif idx == j_next - 2:
+            oc_dis = min(prices[j_next], prices[idx + 1] / self.efficiency)
+        else:
+            oc_dis = min(prices[j_next], min(prices[(idx + 1):j_next]) / self.efficiency)
 
         return oc_ch, oc_dis
 
