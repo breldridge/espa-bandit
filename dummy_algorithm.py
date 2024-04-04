@@ -119,7 +119,7 @@ class Agent():
         # estimate initial SoC for tomorrow's DAM
         t_init = datetime.datetime.strptime(self.market['timestamps'][0],'%Y%m%d%H%M')
         # t_now = datetime.datetime.strptime(self.market['current_time'],'%Y%m%d%H%M') #TODO: switch back once above in included in market_data
-        t_now = datetime.datetime.strptime(self.market['UID'][5:],'%Y%m%d%H%M')
+        t_now = datetime.datetime.strptime(self.market['uid'][5:],'%Y%m%d%H%M')
         t_init = t_init.strftime('%Y%m%d%H%M')
         t_now = t_now.strftime('%Y%m%d%H%M')
         if self.resource['schedule'].keys():
