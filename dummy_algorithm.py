@@ -87,34 +87,41 @@ class Agent():
         bus = 'NEVP'
         prices = self.market["previous"][type]["prices"]["EN"][bus]
         self._calculate_offer_curve(prices)
-        self._descretize_offer_curves()
+        # self._descretize_offer_curves()
         self._format_offer_curves()
 
         return self.formatted_offer
 
+    def _offer_to_dicts(self, mq_list=None, mc_list=None):
+
+        if not mq_list and not mc_list:
+            zeros = {t: 0 for t in self.market['timestamps']}
+            return zeros, zeros
+
+        mq_dict = {}
+        mc_dict = {}
+        for i, time in enumerate(self.market['timestamps']):
+            # add the charge offer curve
+            mc = mc_list[i]
+            mq = mq_list[i]
+            if isinstance(mc, float) and isinstance(mq, float):
+                mq_dict[time] = mq
+                mc_dict[time] = mc
+            elif isinstance(mc, list) and isinstance(mq, list):
+                assert len(mc) == len(mq), f"charge mc and mq have different length, period {time}"
+                offer = self.binner.collate(mq, mc)
+                mq_dict[time] = offer[0]
+                mc_dict[time] = offer[1]
+            else:
+                raise TypeError(f"unsupported charge offer types: mc is {type(mc)}, mq is {type(mq)}")
+        return mq_dict, mc_dict
+
     def _format_offer_curves(self):
-        # Offer parsing script below:
-        required_times = [t for t in self.market['timestamps']]
 
         # Convert the offer curves to timestamp:offer_value dictionaries
-        block_ch_mc = {}
-        for i, cost in enumerate(self.charge_mc):
-            block_ch_mc[required_times[i]] = float(cost)
-        block_ch_mq = {}
-        for i, power in enumerate(self.charge_mq):
-            block_ch_mq[required_times[i]] = float(power)  # 125MW
-
-        block_dc_mc = {}
-        block_soc_mc = {}
-        for i, cost in enumerate(self.discharge_mc):
-            block_dc_mc[required_times[i]] = float(cost)
-            block_soc_mc[required_times[i]] = 0
-
-        block_dc_mq = {}
-        block_soc_mq = {}
-        for i, power in enumerate(self.discharge_mq):
-            block_dc_mq[required_times[i]] = float(power)  # 125MW
-            block_soc_mq[required_times[i]] = 0
+        block_ch_mq, block_ch_mc = self._offer_to_dicts(self.charge_mq, self.charge_mc)
+        block_dc_mq, block_dc_mc = self._offer_to_dicts(self.discharge_mq, self. discharge_mc)
+        block_soc_mq, block_soc_mc = self._offer_to_dicts()
 
         # estimate initial SoC for tomorrow's DAM
         t_init = datetime.datetime.strptime(self.market['timestamps'][0],'%Y%m%d%H%M')
