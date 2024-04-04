@@ -73,7 +73,7 @@ class Agent():
             raise ValueError(f"Unable to find offer function for market_type={market_type}")
 
         # Then save the result
-        self._save_json(offer, f'offer_{self.step}')
+        self._save_json(offer, f'offer_{self.step}.json')
 
     def save_from_previous(self):
         # if the current market type is DAM, then we need to save it in order to run RTM
