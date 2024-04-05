@@ -435,7 +435,7 @@ class Agent():
             arr2 = prices[j - 1]
         else:                               # planning to discharge after next period (j is defined greater than idx)
             arr1 = min(prices[0:])
-            arr2 = max(prices[(idx + 1):j])
+            arr2 = max(prices[idx:j])
 
         oc_ch = min(prices[:idx] + prices[idx+1:]) * self.efficiency
         oc_dis = arr1 * self.efficiency + arr2 - prices[idx]
