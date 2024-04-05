@@ -428,13 +428,13 @@ class Agent():
         # arr1: next best purchase price
         # arr2: next best sell price
         elif j == idx + 1:                  # planning to discharge next period
-            arr1 = min(prices[0:idx - 1])
+            arr1 = min(prices[0:idx])
             arr2 = 0
         elif j == idx + 2:                  # planning to discharge right after next period
-            arr1 = min(prices[0:idx - 1])
+            arr1 = min(prices[0:idx])
             arr2 = prices[j - 1]
         else:                               # planning to discharge after next period (j is defined greater than idx)
-            arr1 = min(prices[0:idx - 1])
+            arr1 = min(prices[0:])
             arr2 = max(prices[(idx + 1):j])
 
         oc_ch = min(np.delete(np.array(prices[0:j]), idx).min()) * self.efficiency
