@@ -87,9 +87,9 @@ class Agent():
         if 'DAM' in self.market["market_type"]:
             self._save_json(self.market['previous'], self._prev_dam_file)
 
-    def _add_logger(self):
+    def _add_logger(self, name):
 
-        self.logger = logging.getLogger("bandit_log")
+        self.logger = logging.getLogger(name)
         self.logger.setLevel(logging.DEBUG)
 
         console_handler = logging.StreamHandler()
