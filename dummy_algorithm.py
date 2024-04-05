@@ -6,6 +6,7 @@ import numpy as np
 import argparse
 import json
 import datetime
+import logging
 from itertools import accumulate
 
 # Standard battery parameters
@@ -36,7 +37,7 @@ class Agent():
     - make_me_an_offer() reads the market type and saves to disc a JSON file containing offer data
     '''
 
-    def __init__(self, time_step, market_info, resource_info):
+    def __init__(self, time_step, market_info, resource_info, name='bandit'):
         # Data input from WEASLE
         self.step = time_step
         self.market = market_info
@@ -59,15 +60,21 @@ class Agent():
         # Add the offer binner
         self.binner = ou.Binner(output_type='lists')
 
-        self._prev_dam_file = 'prev_day_ahead_market'
-        self.save_from_previous()
+        # logger
+        self._add_logger(f'{name}_log')
+
+        # self._prev_dam_file = 'prev_day_ahead_market'
+        # self.save_from_previous()
 
     def make_me_an_offer(self):
         # Read in information from the market
         market_type = self.market["market_type"]
         if 'DAM' in market_type:
+            self.logger.info("generating DA offer...")
+            print('TEST PRINT')
             offer = self._day_ahead_offer()
         elif 'RTM' in market_type:
+            self.logger.info('generating RT offer...')
             offer = self._real_time_offer()
         else:
             raise ValueError(f"Unable to find offer function for market_type={market_type}")
@@ -80,6 +87,19 @@ class Agent():
         if 'DAM' in self.market["market_type"]:
             self._save_json(self.market['previous'], self._prev_dam_file)
 
+    def _add_logger(self):
+
+        self.logger = logging.getLogger("bandit_log")
+        self.logger.setLevel(logging.DEBUG)
+
+        console_handler = logging.StreamHandler()
+        console_handler.setLevel(logging.DEBUG)
+
+        formatter = logging.Formatter('%(asctime)s - %(name)s - %(levelname)s - %(message)s')
+        console_handler.setFormatter(formatter)
+
+        self.logger.addHandler(console_handler)
+
     def _day_ahead_offer(self):
         # Make the offer curves and unload into arrays
         type = self.market['market_type']
@@ -89,6 +109,7 @@ class Agent():
         self._calculate_offer_curve(prices)
         # self._descretize_offer_curves()
         self._format_offer_curves()
+        self.logger.debug("ready to save DA offer")
 
         return self.formatted_offer
 
@@ -101,15 +122,17 @@ class Agent():
         mq_dict = {}
         mc_dict = {}
         for i, time in enumerate(self.market['timestamps']):
-            # add the charge offer curve
             mc = mc_list[i]
             mq = mq_list[i]
             if isinstance(mc, (int,float)) and isinstance(mq, (int,float)):
+                self.logger.debug(f"{time} offer tuple ({mq},${mc}) does not require binning.")
                 mq_dict[time] = mq
                 mc_dict[time] = mc
             elif isinstance(mc, list) and isinstance(mq, list):
                 assert len(mc) == len(mq), f"charge mc and mq have different length, period {time}"
+                lmc = len(mc)
                 offer = self.binner.collate(mq, mc)
+                self.logger.debug(f"{time} offer list length {lmc} --> {len(offer[0])} after binning.")
                 mq_dict[time] = offer[0]
                 mc_dict[time] = offer[1]
             else:
@@ -319,6 +342,7 @@ class Agent():
         # Save as json file in the current directory with name offer_{time_step}.json
         if filename is None:
             filename =f'offer_{self.step}.json'
+        self.logger.info(f"saving {filename}")
         with open(filename, 'w') as f:
             json.dump(save_dict, f, indent=4, cls=NpEncoder)
 
@@ -364,6 +388,7 @@ class Agent():
                     oc_ch, oc_dis = self._calc_oc_between_cycles(combined_list, prices, i)
 
             # save to list
+            self.logger.debug(f"price... \ttime {i} \tlmp {prices[i]} \t ch {oc_ch} \t dc {oc_dis}")
             charge_list.append(oc_ch)
             discharge_list.append(oc_dis)
 
@@ -519,6 +544,9 @@ class Agent():
         discharge_list = []
         dasoc_list=[]
         for i in range(number_step):
+            ch = charge[i].solution_value()
+            dc = discharge[i].solution_value()
+            self.logger.debug(f'quantities...\t time {i} \tcharge {ch} \tdischarge {dc}')
             charge_list.append(charge[i].solution_value())
             discharge_list.append(discharge[i].solution_value())
             #dasoc_list.append(dasoc[i].solution_value())
