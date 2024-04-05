@@ -416,7 +416,7 @@ class Agent():
         # 'j' is the next discharging period or end-of-horizon
         j = None
         if idx < len(combined_list) - 1:
-            j = next(index for index, value in enumerate(combined_list[idx + 1:]) if value > 0)
+            j = idx + 1 + next(index for index, value in enumerate(combined_list[idx + 1:]) if value > 0)
         if not j:
             j = min(idx + 1, len(prices) - 1) # something to ensure that j is in the range of the lists
         # j = idx + 1 + next((index for index, value in enumerate(combined_list[idx + 1:]) if value > 0), None)
