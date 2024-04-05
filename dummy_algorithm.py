@@ -437,7 +437,7 @@ class Agent():
             arr1 = min(prices[0:])
             arr2 = max(prices[(idx + 1):j])
 
-        oc_ch = min(np.delete(np.array(prices[0:j]), idx).min()) * self.efficiency
+        oc_ch = min(prices[:idx] + prices[idx+1:]) * self.efficiency
         oc_dis = arr1 * self.efficiency + arr2 - prices[idx]
         return oc_ch, oc_dis
 
