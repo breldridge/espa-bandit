@@ -434,8 +434,8 @@ class Agent():
             arr1 = min(prices[0:idx])
             arr2 = prices[j - 1]
         else:                               # planning to discharge after next period (j is defined greater than idx)
-            arr1 = min(prices[0:])
-            arr2 = max(prices[idx:j])
+            arr1 = min(prices[0:idx])
+            arr2 = max(prices[idx:j+1])
 
         oc_ch = min(prices[:idx] + prices[idx+1:]) * self.efficiency
         oc_dis = arr1 * self.efficiency + arr2 - prices[idx]
@@ -453,7 +453,7 @@ class Agent():
         if idx == len(prices) - 1:      # currently in last period
             arr1 = 0
         else:                           # any earlier period
-            arr1 = max(prices[idx + 1:])
+            arr1 = max(prices[idx+1:])
 
         # arr2: next best purchase price
         if j == idx - 1:                # last charge was last period
@@ -482,7 +482,7 @@ class Agent():
         else:
             oc_ch = self.price_floor
 
-        oc_dis = min(prices[t_last:idx]) / self.efficiency
+        oc_dis = min(prices[t_last:idx+1]) / self.efficiency
 
         return oc_ch, oc_dis
 
@@ -501,7 +501,7 @@ class Agent():
         if idx >= j_next - 1:
             oc_dis = min(prices[j_next], prices[idx + 1] / self.efficiency)
         else:
-            oc_dis = min(prices[j_next], min(prices[(idx + 1):j_next]) / self.efficiency)
+            oc_dis = min(prices[j_next], min(prices[(idx + 1):j_next+1]) / self.efficiency)
 
         return oc_ch, oc_dis
 
