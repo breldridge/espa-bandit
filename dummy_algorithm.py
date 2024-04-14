@@ -71,8 +71,8 @@ class Agent():
         market_type = self.market["market_type"]
         if 'DAM' in market_type:
             self.logger.info("generating DA offer...")
-            print('TEST PRINT')
-            offer = self._day_ahead_offer()
+            # offer = self._day_ahead_offer()
+            offer = ou.compute_offers(self.resource, self.market['timestamps'], None, None)
         elif 'RTM' in market_type:
             self.logger.info('generating RT offer...')
             offer = self._real_time_offer()
