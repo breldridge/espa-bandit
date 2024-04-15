@@ -207,8 +207,9 @@ class Agent():
         t_end = max(self.market['timestamps'])
         self.logger.debug(f'Last timestamp set to {t_end}')
         for t in self.market['timestamps']:
-            en_ledger = {tt:order for tt,order in self.resource['ledger'][self.rid]['EN'].items() if tt >= t}
-            self.logger.debug(f"generating relevant energy ledger in period {t}. number of keys={len(en_ledger.keys())}")
+            #en_ledger = {tt:order for tt,order in self.resource['ledger'][self.rid]['EN'].items() if tt >= t}
+            en_ledger = self.resource['ledger'][self.rid]['EN'][t]
+            self.logger.debug(f"generating relevant energy ledger in period {t}. number of orders={len(en_ledger)}")
             block_ch_mq[t] = []
             block_ch_mc[t] = []
             block_dc_mq[t] = []
@@ -216,27 +217,25 @@ class Agent():
             remaining_capacity = soc_headroom
 
             # add blocks for cost of current dispatch:
-            if t in en_ledger.keys():
-                self.logger.debug(f"ledger has {len(en_ledger[t])} items in time {t}")
-                for order in en_ledger[t]:
-                    print(f'{t}: looking into order {order}')
-                    mq, mc = order
-                    if mq < 0:
-                        soc_available += mq * self.efficiency
-                        soc_headroom -= mq * self.efficiency
-                        block_ch_mq[t].append(-mq)
-                        block_ch_mc[t].append(mc)
-                        best_ch_price = min(best_ch_price, mc)
-                        print(f"added ({-mq},${mc}) to charge cost curve")
-                        self.logger.info(f"added ({-mq},${mc}) to charge cost curve, best price is {best_ch_price}")
-                    elif mq > 0:
-                        soc_available -= mq
-                        soc_headroom += mq
-                        block_dc_mq[t].append(mq)
-                        block_dc_mc[t].append(mc)
-                        best_dc_price = max(best_dc_price, mc)
-                        print(f"added ({mq},${mc}) to discharge cost curve, best price is {best_dc_price}")
-                        self.logger.info(f"added ({mq},${mc}) to discharge cost curve")
+            for i,order in enumerate(en_ledger):
+                print(f'{t}: looking into order {i+1}: {order}')
+                mq, mc = order
+                if mq < 0:
+                    soc_available += mq * self.efficiency
+                    soc_headroom -= mq * self.efficiency
+                    block_ch_mq[t].append(-mq)
+                    block_ch_mc[t].append(mc)
+                    best_ch_price = min(best_ch_price, mc)
+                    print(f"added ({-mq},${mc}) to charge cost curve")
+                    self.logger.info(f"added ({-mq},${mc}) to charge cost curve, best price is {best_ch_price}")
+                elif mq > 0:
+                    soc_available -= mq
+                    soc_headroom += mq
+                    block_dc_mq[t].append(mq)
+                    block_dc_mc[t].append(mc)
+                    best_dc_price = max(best_dc_price, mc)
+                    print(f"added ({mq},${mc}) to discharge cost curve, best price is {best_dc_price}")
+                    self.logger.info(f"added ({mq},${mc}) to discharge cost curve")
             else:
                 self.logger.debug(f"did not find {t} in ledger")
 
