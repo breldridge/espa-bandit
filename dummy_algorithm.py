@@ -247,7 +247,7 @@ class Agent():
 
 
         post_market_ledger = {t: order for t, order in self.resource['ledger'][self.rid]['EN'].items() if t > t_end}
-        self.logger.debug(f"ledger includes {len(en_ledger)} additional time periods")
+        self.logger.debug(f"ledger includes {len(post_market_ledger)} additional time periods")
         for t, order in post_market_ledger.items():
             for mq,mc in order:
                 best_ch_price = min(best_ch_price, mc)
