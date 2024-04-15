@@ -323,9 +323,15 @@ class Agent():
         return offer_out_dict
 
     def _increase_charging_offers(self, offer, adjustment):
-        new_block={}
-        for t,mc_list in offer[self.rid]['block_ch_mc'].items():
-            new_block[t] = [mc + adjustment for mc in mc_list]
+        old_block = offer[self.rid]['block_ch_mc']
+        if isinstance(old_block, int):
+            new_block = old_block + adjustment
+        elif isinstance(old_block, dict):
+            new_block = {}
+            for t,mc_list in old_block.items():
+                new_block[t] = [mc + adjustment for mc in mc_list]
+        else:
+            raise TypeError(f'charge block type is unsupported. type={type(old_block)}')
         self.logger.debug(f'increasing charging offers by ${adjustment}')
         offer[self.rid]['block_ch_mc'].update(new_block)
 
