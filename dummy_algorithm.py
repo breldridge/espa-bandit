@@ -205,7 +205,9 @@ class Agent():
         block_soc_mq = {}
 
         t_end = self.market['timestamps'][-1]
+        self.logger.debug(f'Last timestamp set to {t_end}')
         for t in self.market['timestamps']:
+            self.logger.debug("generating relevant energy ledger")
             en_ledger = {tt:order for tt,order in self.resource['ledger'][self.rid]['EN'].items() if tt >= t}
             block_ch_mq[t] = []
             block_ch_mc[t] = []
@@ -215,7 +217,8 @@ class Agent():
 
             # add blocks for cost of current dispatch:
             if t in en_ledger.keys():
-                for order in en_ledger[t].items():
+                self.logger.debug(f"ledger has {len(en_ledger[t])} items in time {t}")
+                for order in en_ledger[t]:
                     print(f'{t}: looking into order {order}')
                     mq, mc = order
                     if mq < 0:
