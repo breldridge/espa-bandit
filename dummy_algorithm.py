@@ -207,8 +207,8 @@ class Agent():
         t_end = self.market['timestamps'][-1]
         self.logger.debug(f'Last timestamp set to {t_end}')
         for t in self.market['timestamps']:
-            self.logger.debug("generating relevant energy ledger")
             en_ledger = {tt:order for tt,order in self.resource['ledger'][self.rid]['EN'].items() if tt >= t}
+            self.logger.debug(f"generating relevant energy ledger. Keys={en_ledger.keys()}")
             block_ch_mq[t] = []
             block_ch_mc[t] = []
             block_dc_mq[t] = []
