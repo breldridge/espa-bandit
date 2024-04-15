@@ -324,14 +324,14 @@ class Agent():
 
     def _increase_charging_offers(self, offer, adjustment):
         old_block = offer[self.rid]['block_ch_mc']
-        if isinstance(old_block, int):
-            new_block = old_block + adjustment
-        elif isinstance(old_block, dict):
-            new_block = {}
-            for t,mc_list in old_block.items():
-                new_block[t] = [mc + adjustment for mc in mc_list]
-        else:
-            raise TypeError(f'charge block type is unsupported. type={type(old_block)}')
+        new_block = {}
+        for t, offer in old_block.items():
+            if isinstance(offer, int):
+                new_block[t] = offer + adjustment
+            elif isinstance(offer, list):
+                new_block[t] = [mc + adjustment for mc in offer]
+            else:
+                raise TypeError(f'charge block type is unsupported. type={type(old_block)}')
         self.logger.debug(f'increasing charging offers by ${adjustment}')
         offer[self.rid]['block_ch_mc'].update(new_block)
 
