@@ -195,6 +195,8 @@ class Agent():
         initial_soc = self.resource["status"][self.rid]["soc"]
         soc_available = initial_soc - self.socmin
         soc_headroom = self.socmax - initial_soc
+        best_dc_price = self.price_floor
+        best_ch_price = self.price_ceiling
         block_dc_mc = {}
         block_dc_mq = {}
         block_ch_mc = {}
@@ -203,65 +205,47 @@ class Agent():
         block_soc_mq = {}
 
         t_end = self.market['timestamps'][-1]
-        for t_now in self.market['timestamps']:
-            en_ledger = {t:order for t,order in self.resource['ledger'][self.rid]['EN'].items() if t >= t_now}
-            block_ch_mq[t_now] = []
-            block_ch_mc[t_now] = []
-            block_dc_mq[t_now] = []
-            block_dc_mc[t_now] = []
+        for t in self.market['timestamps']:
+            en_ledger = {tt:order for tt,order in self.resource['ledger'][self.rid]['EN'].items() if tt >= t}
+            block_ch_mq[t] = []
+            block_ch_mc[t] = []
+            block_dc_mq[t] = []
+            block_dc_mc[t] = []
+            remaining_capacity = soc_headroom
 
             # add blocks for cost of current dispatch:
-            if t_now in en_ledger.keys():
-                for mq, mc in en_ledger[t_now]:
+
+            if t in en_ledger.keys():
+                for mq, mc in en_ledger[t]:
                     if mq < 0:
                         soc_available += mq * self.efficiency
                         soc_headroom -= mq * self.efficiency
-                        block_ch_mq[t_now].append(-mq)
-                        block_ch_mc[t_now].append(mc)
+                        block_ch_mq[t].append(-mq)
+                        block_ch_mc[t].append(mc)
+                        best_ch_price = min(best_ch_price, mc)
+                        self.logger.debug(f"added ({-mq},${mc}) to charge cost curve")
                     elif mq > 0:
                         soc_available -= mq
                         soc_headroom += mq
-                        block_dc_mq[t_now].append(mq)
-                        block_dc_mc[t_now].append(mc)
+                        block_dc_mq[t].append(mq)
+                        block_dc_mc[t].append(mc)
+                        best_dc_price = max(best_dc_price, mc)
+                        self.logger.debug(f"added ({mq},${mc}) to discharge cost curve")
 
-            # add blocks for soc available/headroom
-            ledger_list = [tup for sublist in en_ledger.values() for tup in sublist]
-            ledger_decreasing = sorted(ledger_list, key=lambda tup:tup[1], reverse=True)
-            ledger_increasing = sorted(ledger_list, key=lambda tup:tup[1], reverse=False)
-            # use decreasing price ledger for charging cost curve
-            remaining_capacity = soc_headroom
-            for mq, mc in ledger_decreasing:
-                if 0 > mq >= -remaining_capacity:
-                    remaining_capacity += mq * self.efficiency # remaining_capacity decreases because m<0
-                    block_ch_mq[t_now].append(-mq)
-                    block_ch_mc[t_now].append(mc)
-                else:
-                    remaining_capacity -= remaining_capacity
-                    block_ch_mq[t_now].append(remaining_capacity)
-                    block_ch_mc[t_now].append(mc)
-                    break
-            if remaining_capacity:
-                block_ch_mq[t_now].append(remaining_capacity)
-                block_ch_mc[t_now].append(self.price_floor)
-            # use increasing price ledger for discharging cost curve
-            remaining_capacity = soc_available
-            for mq, mc in ledger_increasing:
-                if 0 < mq <= remaining_capacity:
-                    remaining_capacity -= mq
-                    block_dc_mq[t_now].append(mq)
-                    block_dc_mc[t_now].append(mc)
-                else:
-                    remaining_capacity -= remaining_capacity
-                    block_dc_mq[t_now].append(remaining_capacity)
-                    block_dc_mc[t_now].append(mc)
-                    break
-            if remaining_capacity:
-                block_dc_mq[t_now].append(remaining_capacity)
-                block_dc_mc[t_now].append(self.price_ceiling)
+        for t in self.market['timestamps']:
+            # add remaining discharge capacity at max known price
+            dc_capacity = self.dcmax - sum(block_dc_mq[t])
+            block_dc_mq[t].append(dc_capacity)
+            block_dc_mc[t].append(best_dc_price)
+            # add remaining discharge capacity at min known price
+            ch_capacity = self.chmax - sum(block_ch_mq[t])
+            block_ch_mq[t].append(ch_capacity)
+            block_ch_mc[t].append(best_ch_price)
+
 
         # valuation of post-horizon SoC
         post_market_ledger = {t: order for t, order in self.resource['ledger'][self.rid]['EN'].items() if t > t_end}
-        post_market_list = [tup for sublist in post_market_ledger.values() for tup in sublist]
+        post_market_list = [tup for t, sublist in post_market_ledger.items() for tup in sublist]
         post_market_sorted = sorted(post_market_list, key=lambda tup:tup[1], reverse=True)
         block_soc_mq[t_end] = []
         block_soc_mc[t_end] = []
