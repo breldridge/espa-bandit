@@ -214,23 +214,26 @@ class Agent():
             remaining_capacity = soc_headroom
 
             # add blocks for cost of current dispatch:
-
             if t in en_ledger.keys():
-                for mq, mc in en_ledger[t]:
+                for order in en_ledger[t].items():
+                    print(f'{t}: looking into order {order}')
+                    mq, mc = order
                     if mq < 0:
                         soc_available += mq * self.efficiency
                         soc_headroom -= mq * self.efficiency
                         block_ch_mq[t].append(-mq)
                         block_ch_mc[t].append(mc)
                         best_ch_price = min(best_ch_price, mc)
-                        self.logger.debug(f"added ({-mq},${mc}) to charge cost curve")
+                        print(f"added ({-mq},${mc}) to charge cost curve")
+                        self.logger.info(f"added ({-mq},${mc}) to charge cost curve, best price is {best_ch_price}")
                     elif mq > 0:
                         soc_available -= mq
                         soc_headroom += mq
                         block_dc_mq[t].append(mq)
                         block_dc_mc[t].append(mc)
                         best_dc_price = max(best_dc_price, mc)
-                        self.logger.debug(f"added ({mq},${mc}) to discharge cost curve")
+                        print(f"added ({mq},${mc}) to discharge cost curve, best price is {best_dc_price}")
+                        self.logger.info(f"added ({mq},${mc}) to discharge cost curve")
 
         for t in self.market['timestamps']:
             # add remaining discharge capacity at max known price
@@ -247,24 +250,30 @@ class Agent():
         post_market_ledger = {t: order for t, order in self.resource['ledger'][self.rid]['EN'].items() if t > t_end}
         post_market_list = [tup for t, sublist in post_market_ledger.items() for tup in sublist]
         post_market_sorted = sorted(post_market_list, key=lambda tup:tup[1], reverse=True)
-        block_soc_mq[t_end] = []
-        block_soc_mc[t_end] = []
+        soc_mq = []
+        soc_mc = []
         remaining_capacity = soc_available
         for mq, mc in post_market_sorted:
             if 0 < mq <= remaining_capacity:
                 remaining_capacity -= mq
-                block_soc_mq[t_end].append(mq)
-                block_soc_mc[t_end].append(mc)
+                soc_mq.append(mq)
+                soc_mc.append(mc)
             else:
                 remaining_capacity -= remaining_capacity
-                block_soc_mq[t_end].append(remaining_capacity)
-                block_soc_mc[t_end].append(mc)
+                soc_mq.append(remaining_capacity)
+                soc_mc.append(mc)
         if remaining_capacity:
-            block_soc_mq[t_end].append(remaining_capacity)
-            block_soc_mc[t_end].append(self.price_ceiling)
-        block_soc_mq[t_end].append(soc_headroom)
-        block_soc_mc[t_end].append(self.price_floor)
+            soc_mq.append(remaining_capacity)
+            soc_mc.append(self.price_ceiling)
+        soc_mq.append(soc_headroom)
+        soc_mc.append(self.price_floor)
 
+        # collate into bins
+        soc_offer = self.binner.collate(soc_mq, soc_mc)
+        block_soc_mq[t_end] = soc_offer[0]
+        block_soc_mc[t_end] = soc_offer[1]
+        self.logger.info(f"soc quantities are {soc_offer[0]}")
+        self.logger.info(f"soc prices are {soc_offer[1]}")
 
         # Package the dictionaries into an output formatted dictionary
         offer_out_dict = {self.rid: {}}
