@@ -74,7 +74,7 @@ class Agent():
             # offer = self._day_ahead_offer()
             offer = ou.compute_offers(self.resource, self.market['timestamps'], None, None)
         elif 'RTM' in market_type:
-            self.logger.info('generating RT offer...')
+            self.logger.info(f'generating RT offer for t={self.market["timestamps"][0]}...')
             offer = self._real_time_offer()
         else:
             raise ValueError(f"Unable to find offer function for market_type={market_type}")
@@ -207,13 +207,21 @@ class Agent():
         t_end = max(self.market['timestamps'])
         self.logger.debug(f'Last timestamp set to {t_end}')
         for t in self.market['timestamps']:
-            #en_ledger = {tt:order for tt,order in self.resource['ledger'][self.rid]['EN'].items() if tt >= t}
-            en_ledger = self.resource['ledger'][self.rid]['EN'][t]
-            self.logger.debug(f"generating relevant energy ledger in period {t}. number of orders={len(en_ledger)}")
             block_ch_mq[t] = []
             block_ch_mc[t] = []
             block_dc_mq[t] = []
             block_dc_mc[t] = []
+            if t not in self.resource['ledger'][self.rid]['EN'].keys():
+                block_ch_mq[t].append(0)
+                block_ch_mc[t].append(0)
+                block_dc_mq[t].append(0)
+                block_dc_mc[t].append(0)
+                self.logger.debug(f"no ledger entry in period {t}.")
+                continue
+
+            en_ledger = self.resource['ledger'][self.rid]['EN'][t]
+            #en_ledger = {tt:order for tt,order in self.resource['ledger'][self.rid]['EN'].items() if tt >= t}
+            self.logger.debug(f"generating energy ledger in period {t}. number of orders={len(en_ledger)}")
             remaining_capacity = soc_headroom
 
             # add blocks for cost of current dispatch:
