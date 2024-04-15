@@ -271,6 +271,10 @@ class Agent():
         # valuation of post-horizon SoC
         post_market_list = [tup for t, sublist in post_market_ledger.items() for tup in sublist]
         post_market_sorted = sorted(post_market_list, key=lambda tup:tup[1], reverse=True)
+        message = ''
+        for i,tup in enumerate(post_market_sorted):
+            message += f'\t{i}: {tup}\n'
+        self.logger.debug(f'Remaining orders:\n'+message)
         soc_mq = []
         soc_mc = []
         remaining_capacity = soc_available
@@ -283,22 +287,22 @@ class Agent():
                 soc_mc.append(mc)
             # discharge exhausts remaining capacity
             elif mq > remaining_capacity:
-                remaining_capacity -= remaining_capacity
+                remaining_capacity = 0
                 soc_mq.append(remaining_capacity)
                 soc_mc.append(mc)
             # charging
             else:
                 pass
-        if remaining_capacity:
+        if remaining_capacity > 1e-6:
             soc_mq.append(remaining_capacity)
             soc_mc.append(self.price_ceiling)
-        soc_mq.append(soc_headroom)
-        soc_mc.append(self.price_floor)
+        # soc_mq.append(soc_headroom)
+        # soc_mc.append(self.price_floor)
 
         # collate into bins
         self.logger.debug(f"SoC offer has {len(soc_mq)} elements")
         soc_offer = self.binner.collate(soc_mq, soc_mc)
-        self.logger.debug(f"Binned SoC offer has {len(soc_offer)} elements")
+        self.logger.debug(f"Binned SoC offer has {len(soc_offer[0])} elements")
         block_soc_mq[t_end] = soc_offer[0]
         block_soc_mc[t_end] = soc_offer[1]
         self.logger.info(f"soc quantities are {soc_offer[0]}")
