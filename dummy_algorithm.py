@@ -325,14 +325,15 @@ class Agent():
     def _increase_charging_offers(self, offer, adjustment):
         old_block = offer[self.rid]['block_ch_mc']
         new_block = {}
-        for t, offer in old_block.items():
-            if isinstance(offer, int):
-                new_block[t] = float(offer + adjustment)
-            elif isinstance(offer, list):
-                new_block[t] = [mc + adjustment for mc in offer]
+        self.logger.debug(f"old block is {old_block}")
+        for t, old_offer in old_block.items():
+            if isinstance(old_offer, int):
+                new_block[t] = float(old_offer + adjustment)
+            elif isinstance(old_offer, list):
+                new_block[t] = [mc + adjustment for mc in old_offer]
             else:
                 raise TypeError(f'charge block type is unsupported. type={type(old_block)}')
-        self.logger.debug(f'increasing charging offers by ${adjustment}')
+        self.logger.info(f'increasing charging offers by ${adjustment}')
         offer[self.rid]['block_ch_mc'] = new_block
 
     def _default_reserve_offer(self):
