@@ -204,7 +204,7 @@ class Agent():
         block_soc_mc = {}
         block_soc_mq = {}
 
-        t_end = self.market['timestamps'][-1]
+        t_end = max(self.market['timestamps'])
         self.logger.debug(f'Last timestamp set to {t_end}')
         for t in self.market['timestamps']:
             en_ledger = {tt:order for tt,order in self.resource['ledger'][self.rid]['EN'].items() if tt >= t}
