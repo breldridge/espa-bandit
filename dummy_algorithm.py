@@ -208,7 +208,7 @@ class Agent():
         self.logger.debug(f'Last timestamp set to {t_end}')
         for t in self.market['timestamps']:
             en_ledger = {tt:order for tt,order in self.resource['ledger'][self.rid]['EN'].items() if tt >= t}
-            self.logger.debug(f"generating relevant energy ledger. Keys={en_ledger.keys()}")
+            self.logger.debug(f"generating relevant energy ledger in period {t}. number of keys={len(en_ledger.keys())}")
             block_ch_mq[t] = []
             block_ch_mc[t] = []
             block_dc_mq[t] = []
@@ -237,6 +237,8 @@ class Agent():
                         best_dc_price = max(best_dc_price, mc)
                         print(f"added ({mq},${mc}) to discharge cost curve, best price is {best_dc_price}")
                         self.logger.info(f"added ({mq},${mc}) to discharge cost curve")
+            else:
+                self.logger.debug(f"did not find {t} in ledger")
 
         for t in self.market['timestamps']:
             # add remaining discharge capacity at max known price
