@@ -220,9 +220,7 @@ class Agent():
                 continue
 
             en_ledger = self.resource['ledger'][self.rid]['EN'][t]
-            #en_ledger = {tt:order for tt,order in self.resource['ledger'][self.rid]['EN'].items() if tt >= t}
             self.logger.debug(f"generating energy ledger in period {t}. number of orders={len(en_ledger)}")
-            remaining_capacity = soc_headroom
 
             # add blocks for cost of current dispatch:
             for i,order in enumerate(en_ledger):
@@ -247,33 +245,50 @@ class Agent():
             else:
                 self.logger.debug(f"did not find {t} in ledger")
 
+
+        post_market_ledger = {t: order for t, order in self.resource['ledger'][self.rid]['EN'].items() if t > t_end}
+        self.logger.debug(f"ledger includes {len(en_ledger)} additional time periods")
+        for t, order in post_market_ledger.items():
+            for mq,mc in order:
+                best_ch_price = min(best_ch_price, mc)
+                best_dc_price = max(best_dc_price, mc)
+        self.logger.debug(f'best charging price: {best_ch_price}')
+        self.logger.debug(f'best discharging price: {best_dc_price}')
+
         for t in self.market['timestamps']:
             # add remaining discharge capacity at max known price
             dc_capacity = self.dcmax - sum(block_dc_mq[t])
             block_dc_mq[t].append(dc_capacity)
             block_dc_mc[t].append(best_dc_price)
+            self.logger.debug(f"added {dc_capacity} discharging capacity in time {t}")
             # add remaining discharge capacity at min known price
             ch_capacity = self.chmax - sum(block_ch_mq[t])
             block_ch_mq[t].append(ch_capacity)
             block_ch_mc[t].append(best_ch_price)
+            self.logger.debug(f"added {ch_capacity} charging capacity in time {t}")
 
 
         # valuation of post-horizon SoC
-        post_market_ledger = {t: order for t, order in self.resource['ledger'][self.rid]['EN'].items() if t > t_end}
         post_market_list = [tup for t, sublist in post_market_ledger.items() for tup in sublist]
         post_market_sorted = sorted(post_market_list, key=lambda tup:tup[1], reverse=True)
         soc_mq = []
         soc_mc = []
         remaining_capacity = soc_available
         for mq, mc in post_market_sorted:
+            # if discharging in the future
             if 0 < mq <= remaining_capacity:
+                self.logger.debug(f"post horizon SoC quantity {mq} valued at {mc}.")
                 remaining_capacity -= mq
                 soc_mq.append(mq)
                 soc_mc.append(mc)
-            else:
+            # discharge exhausts remaining capacity
+            elif mq > remaining_capacity:
                 remaining_capacity -= remaining_capacity
                 soc_mq.append(remaining_capacity)
                 soc_mc.append(mc)
+            # charging
+            else:
+                pass
         if remaining_capacity:
             soc_mq.append(remaining_capacity)
             soc_mc.append(self.price_ceiling)
@@ -281,7 +296,9 @@ class Agent():
         soc_mc.append(self.price_floor)
 
         # collate into bins
+        self.logger.debug(f"SoC offer has {len(soc_mq)} elements")
         soc_offer = self.binner.collate(soc_mq, soc_mc)
+        self.logger.debug(f"Binned SoC offer has {len(soc_offer)} elements")
         block_soc_mq[t_end] = soc_offer[0]
         block_soc_mc[t_end] = soc_offer[1]
         self.logger.info(f"soc quantities are {soc_offer[0]}")
