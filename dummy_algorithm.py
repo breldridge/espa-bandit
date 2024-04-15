@@ -79,6 +79,8 @@ class Agent():
         else:
             raise ValueError(f"Unable to find offer function for market_type={market_type}")
 
+        self._increase_charging_offers(offer, 1)
+
         # Then save the result
         self._save_json(offer, f'offer_{self.step}.json')
 
@@ -319,6 +321,13 @@ class Agent():
         offer_out_dict[self.rid].update(self._default_offer_constants(bid_soc=True))
 
         return offer_out_dict
+
+    def _increase_charging_offers(self, offer, adjustment):
+        new_block={}
+        for t,mc_list in offer[self.rid]['block_ch_mc'].items():
+            new_block[t] = [mc + adjustment for mc in mc_list]
+        self.logger.debug(f'increasing charging offers by ${adjustment}')
+        offer[self.rid]['block_ch_mc'].update(new_block)
 
     def _default_reserve_offer(self):
         reg = ['cost_rgu', 'cost_rgd', 'cost_spr', 'cost_nsp']
