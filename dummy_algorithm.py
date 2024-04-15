@@ -300,13 +300,15 @@ class Agent():
         # soc_mc.append(self.price_floor)
 
         # collate into bins
-        self.logger.debug(f"SoC offer has {len(soc_mq)} elements")
+        self.logger.info(f"SoC offer has {len(soc_mq)} elements")
+        self.logger.debug(f"raw soc quantities are {soc_mq}")
+        self.logger.debug(f"raw soc prices are {soc_mc}")
         soc_offer = self.binner.collate(soc_mq, soc_mc)
-        self.logger.debug(f"Binned SoC offer has {len(soc_offer[0])} elements")
         block_soc_mq[t_end] = soc_offer[0]
         block_soc_mc[t_end] = soc_offer[1]
-        self.logger.info(f"soc quantities are {soc_offer[0]}")
-        self.logger.info(f"soc prices are {soc_offer[1]}")
+        self.logger.info(f"Binned SoC offer has {len(soc_offer[0])} elements")
+        self.logger.debug(f"binned soc quantities are {soc_offer[0]}")
+        self.logger.debug(f"binned soc prices are {soc_offer[1]}")
 
         # Package the dictionaries into an output formatted dictionary
         offer_out_dict = {self.rid: {}}
