@@ -79,7 +79,8 @@ class Agent():
         else:
             raise ValueError(f"Unable to find offer function for market_type={market_type}")
 
-        self._increase_charging_offers(offer, 1)
+        self._decrease_charging_offers(offer, 1)
+        self._increase_discharging_offers(offer, 1)
 
         # Then save the result
         self._save_json(offer, f'offer_{self.step}.json')
@@ -209,17 +210,17 @@ class Agent():
         t_end = max(self.market['timestamps'])
         self.logger.debug(f'Last timestamp set to {t_end}')
         for t in self.market['timestamps']:
-            block_ch_mq[t] = []
-            block_ch_mc[t] = []
-            block_dc_mq[t] = []
-            block_dc_mc[t] = []
-            if t not in self.resource['ledger'][self.rid]['EN'].keys():
-                block_ch_mq[t].append(0)
-                block_ch_mc[t].append(0)
-                block_dc_mq[t].append(0)
-                block_dc_mc[t].append(0)
-                self.logger.debug(f"no ledger entry in period {t}.")
-                continue
+            block_ch_mq[t] = [self.chmax]
+            block_ch_mc[t] = [0]
+            block_dc_mq[t] = [self.dcmax]
+            block_dc_mc[t] = [0]
+            # if t not in self.resource['ledger'][self.rid]['EN'].keys():
+            #     block_ch_mq[t].append(0)
+            #     block_ch_mc[t].append(0)
+            #     block_dc_mq[t].append(0)
+            #     block_dc_mc[t].append(0)
+            #     self.logger.debug(f"no ledger entry in period {t}.")
+            #     continue
 
             en_ledger = self.resource['ledger'][self.rid]['EN'][t]
             self.logger.debug(f"generating energy ledger in period {t}. number of orders={len(en_ledger)}")
@@ -231,19 +232,17 @@ class Agent():
                 if mq < 0:
                     soc_available += mq * self.efficiency
                     soc_headroom -= mq * self.efficiency
-                    block_ch_mq[t].append(-mq)
-                    block_ch_mc[t].append(mc)
+                    # block_ch_mq[t].append(-mq)
+                    # block_ch_mc[t].append(mc)
+                    # self.logger.info(f"added ({-mq},${mc}) to charge cost curve, best price is {best_ch_price}")
                     best_ch_price = min(best_ch_price, mc)
-                    print(f"added ({-mq},${mc}) to charge cost curve")
-                    self.logger.info(f"added ({-mq},${mc}) to charge cost curve, best price is {best_ch_price}")
                 elif mq > 0:
                     soc_available -= mq
                     soc_headroom += mq
-                    block_dc_mq[t].append(mq)
-                    block_dc_mc[t].append(mc)
+                    # block_dc_mq[t].append(mq)
+                    # block_dc_mc[t].append(mc)
+                    # self.logger.info(f"added ({mq},${mc}) to discharge cost curve")
                     best_dc_price = max(best_dc_price, mc)
-                    print(f"added ({mq},${mc}) to discharge cost curve, best price is {best_dc_price}")
-                    self.logger.info(f"added ({mq},${mc}) to discharge cost curve")
             else:
                 self.logger.debug(f"did not find {t} in ledger")
 
@@ -322,8 +321,22 @@ class Agent():
 
         return offer_out_dict
 
-    def _increase_charging_offers(self, offer, adjustment):
+    def _decrease_charging_offers(self, offer, adjustment):
         old_block = offer[self.rid]['block_ch_mc']
+        new_block = {}
+        self.logger.debug(f"old block is {old_block}")
+        for t, old_offer in old_block.items():
+            if isinstance(old_offer, int):
+                new_block[t] = float(old_offer - adjustment)
+            elif isinstance(old_offer, list):
+                new_block[t] = [mc - adjustment for mc in old_offer]
+            else:
+                raise TypeError(f'charge block type is unsupported. type={type(old_block)}')
+        self.logger.info(f'decreasing charging offers by ${adjustment}')
+        offer[self.rid]['block_ch_mc'] = new_block
+
+    def _increase_discharging_offers(self, offer, adjustment):
+        old_block = offer[self.rid]['block_dc_mc']
         new_block = {}
         self.logger.debug(f"old block is {old_block}")
         for t, old_offer in old_block.items():
@@ -332,9 +345,9 @@ class Agent():
             elif isinstance(old_offer, list):
                 new_block[t] = [mc + adjustment for mc in old_offer]
             else:
-                raise TypeError(f'charge block type is unsupported. type={type(old_block)}')
+                raise TypeError(f'discharge block type is unsupported. type={type(old_block)}')
         self.logger.info(f'increasing charging offers by ${adjustment}')
-        offer[self.rid]['block_ch_mc'] = new_block
+        offer[self.rid]['block_dc_mc'] = new_block
 
     def _default_reserve_offer(self):
         reg = ['cost_rgu', 'cost_rgd', 'cost_spr', 'cost_nsp']
