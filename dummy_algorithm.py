@@ -79,7 +79,7 @@ class Agent():
         else:
             raise ValueError(f"Unable to find offer function for market_type={market_type}")
 
-        self._decrease_charging_offers(offer, 1)
+        # self._decrease_charging_offers(offer, 1)
         self._increase_discharging_offers(offer, 1)
 
         # Then save the result
@@ -214,7 +214,7 @@ class Agent():
             block_ch_mc[t] = []
             block_dc_mq[t] = []
             block_dc_mc[t] = []
-            if not t in self.resource['ledger'][self.rid]['EN'].keys():
+            if t not in self.resource['ledger'][self.rid]['EN'].keys():
                 block_ch_mq[t].append(0)
                 block_ch_mc[t].append(0)
                 block_dc_mq[t].append(0)
@@ -336,6 +336,7 @@ class Agent():
                 new_block[t] = [mc - adjustment for mc in old_offer]
             else:
                 raise TypeError(f'charge block type is unsupported. type={type(old_block)}')
+        self.logger.debug(f"new block is {new_block}")
         self.logger.info(f'decreasing charging offers by ${adjustment}')
         offer[self.rid]['block_ch_mc'] = new_block
 
@@ -350,7 +351,8 @@ class Agent():
                 new_block[t] = [mc + adjustment for mc in old_offer]
             else:
                 raise TypeError(f'discharge block type is unsupported. type={type(old_block)}')
-        self.logger.info(f'increasing charging offers by ${adjustment}')
+        self.logger.debug(f"new block is {new_block}")
+        self.logger.info(f'increasing discharging offers by ${adjustment}')
         offer[self.rid]['block_dc_mc'] = new_block
 
     def _default_reserve_offer(self):
