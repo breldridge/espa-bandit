@@ -210,22 +210,28 @@ class Agent():
         t_end = max(self.market['timestamps'])
         self.logger.debug(f'Last timestamp set to {t_end}')
         for t in self.market['timestamps']:
-            block_ch_mq[t] = [self.chmax]
-            block_ch_mc[t] = [0]
-            block_dc_mq[t] = [self.dcmax]
-            block_dc_mc[t] = [0]
-            # if t not in self.resource['ledger'][self.rid]['EN'].keys():
-            #     block_ch_mq[t].append(0)
-            #     block_ch_mc[t].append(0)
-            #     block_dc_mq[t].append(0)
-            #     block_dc_mc[t].append(0)
-            #     self.logger.debug(f"no ledger entry in period {t}.")
-            #     continue
+            block_ch_mq[t] = []
+            block_ch_mc[t] = []
+            block_dc_mq[t] = []
+            block_dc_mc[t] = []
+            if not t in self.resource['ledger'][self.rid]['EN'].keys():
+                block_ch_mq[t].append(0)
+                block_ch_mc[t].append(0)
+                block_dc_mq[t].append(0)
+                block_dc_mc[t].append(0)
+                self.logger.debug(f"no ledger entry in period {t}.")
+                continue
+
+            # use these 'zero' offers
+            block_ch_mq[t].append(self.chmax)
+            block_ch_mc[t].append(0)
+            block_dc_mq[t].append(self.dcmax)
+            block_dc_mc[t].append(0)
 
             en_ledger = self.resource['ledger'][self.rid]['EN'][t]
             self.logger.debug(f"generating energy ledger in period {t}. number of orders={len(en_ledger)}")
 
-            # add blocks for cost of current dispatch:
+            # determine best prices and available SoC
             for i,order in enumerate(en_ledger):
                 print(f'{t}: looking into order {i+1}: {order}')
                 mq, mc = order
@@ -243,10 +249,8 @@ class Agent():
                     # block_dc_mc[t].append(mc)
                     # self.logger.info(f"added ({mq},${mc}) to discharge cost curve")
                     best_dc_price = max(best_dc_price, mc)
-            else:
-                self.logger.debug(f"did not find {t} in ledger")
 
-
+        # valuation of post-market SoC
         post_market_ledger = {t: order for t, order in self.resource['ledger'][self.rid]['EN'].items() if t > t_end}
         self.logger.debug(f"ledger includes {len(post_market_ledger)} additional time periods")
         for t, order in post_market_ledger.items():
