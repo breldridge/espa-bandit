@@ -215,9 +215,9 @@ class Agent():
             block_dc_mq[t] = []
             block_dc_mc[t] = []
             if t not in self.resource['ledger'][self.rid]['EN'].keys():
-                block_ch_mq[t].append(0)
+                block_ch_mq[t].append(self.chmax)
                 block_ch_mc[t].append(0)
-                block_dc_mq[t].append(0)
+                block_dc_mq[t].append(self.dcmax)
                 block_dc_mc[t].append(0)
                 self.logger.debug(f"no ledger entry in period {t}.")
                 continue
@@ -233,22 +233,39 @@ class Agent():
 
             # determine best prices and available SoC
             for i,order in enumerate(en_ledger):
-                print(f'{t}: looking into order {i+1}: {order}')
+                self.logger.debug(f'{t}: looking into order {i+1}: {order}')
                 mq, mc = order
-                if mq < 0:
-                    soc_available += mq * self.efficiency
-                    soc_headroom -= mq * self.efficiency
+                if -soc_headroom <= mq * 5/60 < 0:
+                    soc_available += mq * self.efficiency * 5/60
+                    soc_headroom -= mq * self.efficiency * 5/60
                     # block_ch_mq[t].append(-mq)
                     # block_ch_mc[t].append(mc)
                     # self.logger.info(f"added ({-mq},${mc}) to charge cost curve, best price is {best_ch_price}")
                     best_ch_price = min(best_ch_price, mc)
-                elif mq > 0:
-                    soc_available -= mq
-                    soc_headroom += mq
+                elif 0 < mq * 5/60 <= soc_available:
+                    soc_available -= mq * 5/60
+                    soc_headroom += mq * 5/60
                     # block_dc_mq[t].append(mq)
                     # block_dc_mc[t].append(mc)
                     # self.logger.info(f"added ({mq},${mc}) to discharge cost curve")
                     best_dc_price = max(best_dc_price, mc)
+                elif mq * 5/60 < -soc_headroom:
+                    self.logger.warning(f"Period {t}: Scheduled charge exceeds SoC headroom. Setting headroom to zero and available to max. ")
+                    soc_headroom = 0
+                    soc_available = self.socmax - self.socmin
+                    best_ch_price = min(best_ch_price, mc)
+                elif mq * 5/60 >soc_available:
+                    self.logger.warning(f"Period {t}: Scheduled discharge exceeds SoC available. Setting available to zero and headroom to max. ")
+                    soc_headroom = self.socmax - self.socmin
+                    soc_available = 0
+                    best_dc_price = max(best_dc_price, mc)
+                else:
+                    self.logger.warning("A mutually exhaustive set of cases was found to be faulty. Recommend further investigation.")
+
+                if soc_available < 0:
+                    self.logger.warning(f"Scheduled energy flows result in SoC below min in {t}")
+                if soc_headroom < 0:
+                    self.logger.warning(f"Scheduled energy flows result in SoC above max in {t}")
 
         # valuation of post-market SoC
         post_market_ledger = {t: order for t, order in self.resource['ledger'][self.rid]['EN'].items() if t > t_end}
@@ -263,14 +280,16 @@ class Agent():
         for t in self.market['timestamps']:
             # add remaining discharge capacity at max known price
             dc_capacity = self.dcmax - sum(block_dc_mq[t])
-            block_dc_mq[t].append(dc_capacity)
-            block_dc_mc[t].append(best_dc_price)
-            self.logger.debug(f"added {dc_capacity} discharging capacity in time {t}")
+            if dc_capacity > 1e-2:
+                block_dc_mq[t].append(dc_capacity)
+                block_dc_mc[t].append(best_dc_price)
+                self.logger.debug(f"added {dc_capacity} discharging capacity in time {t}")
             # add remaining discharge capacity at min known price
             ch_capacity = self.chmax - sum(block_ch_mq[t])
-            block_ch_mq[t].append(ch_capacity)
-            block_ch_mc[t].append(best_ch_price)
-            self.logger.debug(f"added {ch_capacity} charging capacity in time {t}")
+            if ch_capacity > 1e-2:
+                block_ch_mq[t].append(ch_capacity)
+                block_ch_mc[t].append(best_ch_price)
+                self.logger.debug(f"added {ch_capacity} charging capacity in time {t}")
 
 
         # valuation of post-horizon SoC
@@ -283,26 +302,31 @@ class Agent():
         soc_mq = []
         soc_mc = []
         remaining_capacity = soc_available
+        self.logger.info(f"{remaining_capacity} MWh available at end of horizon. Allocating value...")
         for mq, mc in post_market_sorted:
             # if discharging in the future
-            if 0 < mq <= remaining_capacity:
+            if 0 < mq * 5/60 <= remaining_capacity:
                 self.logger.debug(f"post horizon SoC quantity {mq} valued at {mc}.")
-                remaining_capacity -= mq
+                remaining_capacity -= mq * 5/60
                 soc_mq.append(mq)
                 soc_mc.append(mc)
             # discharge exhausts remaining capacity
-            elif mq > remaining_capacity:
+            elif 0 < remaining_capacity < mq * 5/60:
                 remaining_capacity = 0
                 soc_mq.append(remaining_capacity)
                 soc_mc.append(mc)
+            # skip if no capacity is left
+            elif remaining_capacity < 1e-2:
+                break
             # charging
             else:
                 pass
-        if remaining_capacity > 1e-6:
+
+        if remaining_capacity > 1e-2:
             soc_mq.append(remaining_capacity)
             soc_mc.append(self.price_ceiling)
-        # soc_mq.append(soc_headroom)
-        # soc_mc.append(self.price_floor)
+        soc_mq.append(soc_headroom)
+        soc_mc.append(0)
 
         # collate into bins
         self.logger.info(f"SoC offer has {len(soc_mq)} elements")
@@ -610,16 +634,14 @@ class Agent():
 
 
 if __name__ == '__main__':
-    # Add argument parser for three required input arguments
-    parser = argparse.ArgumentParser()
-    parser.add_argument('time_step', type=int, help='Integer time step tracking the progress of the\
-                        simulated market.')
-    parser.add_argument('market_info', help='json formatted dictionary with market information.')
-    parser.add_argument('resource_info', help='json formatted dictionary with resource information.')
+    time_step = 28
+    market_file = 'market_28.json'
+    resource_file = 'resource_28.json'
+    with open(market_file, 'r') as f:
+        market_info = json.load(f)
+    with open(resource_file, 'r') as f:
+        resource_info = json.load(f)
 
-    args = parser.parse_args()
-
-    # Parse json inputs into python dictionaries
-    time_step = args.time_step
-    market_info = json.loads(args.market_info)
-    resource_info = json.loads(args.resource_info)
+    agent = Agent(time_step, market_info, resource_info)
+    agent.logger.setLevel(logging.INFO)
+    agent.make_me_an_offer()
