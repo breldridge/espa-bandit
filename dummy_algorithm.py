@@ -15,7 +15,6 @@ socmin = 128
 chmax = 125
 dcmax = 125
 efficiency = 0.892
-duration_minutes = 5
 
 class NpEncoder(json.JSONEncoder):
     def default(self, obj):
@@ -44,8 +43,6 @@ class Agent():
         self.resource = resource_info
         self.rid = resource_info['rid']
 
-        self.duration_minutes = duration_minutes
-
         # Standard battery parameters
         self.socmax = socmax
         self.socmin = socmin
@@ -66,7 +63,7 @@ class Agent():
         # self._prev_dam_file = 'prev_day_ahead_market'
         # self.save_from_previous()
 
-    def make_me_an_offer(self):
+    def make_me_an_offer(self, price_delta=None, soc_limit=None):
         # Read in information from the market
         market_type = self.market["market_type"]
         if 'DAM' in market_type:
@@ -75,12 +72,12 @@ class Agent():
             offer = ou.compute_offers(self.resource, self.market['timestamps'], None, None)
         elif 'RTM' in market_type:
             self.logger.info(f'generating RT offer for t={self.market["timestamps"][0]}...')
-            offer = self._real_time_offer()
+            offer = self._real_time_offer(soc_limit)
         else:
             raise ValueError(f"Unable to find offer function for market_type={market_type}")
 
-        # self._decrease_charging_offers(offer, 1)
-        self._increase_discharging_offers(offer, 1)
+        if isinstance(price_delta, float):
+            self._increase_discharging_offers(offer, price_delta)
 
         # Then save the result
         self._save_json(offer, f'offer_{self.step}.json')
@@ -157,9 +154,10 @@ class Agent():
         t_now = t_now.strftime('%Y%m%d%H%M')
         if self.resource['schedule'].keys():
             schedule = self.resource['schedule'][self.rid]['EN']
-            schedule_to_tomorrow = [q for t,q in schedule if t_now <= t < t_init]   # these may be misordered but that is OK
+            duration = dict(zip(self.market['timestamps'], self.market['durations']))
+            schedule_to_tomorrow = [(duration[t]/60) * q for t,q in schedule if t_now <= t < t_init]   # these may be misordered but that is OK
             schedule_to_tomorrow = self._process_efficiency(schedule_to_tomorrow)
-            soc_estimate = self.resource['status'][self.rid]['soc'] - sum(schedule_to_tomorrow) * self.duration_minutes / 60
+            soc_estimate = self.resource['status'][self.rid]['soc'] - sum(schedule_to_tomorrow)
             dispatch_estimate = self.resource['schedule'][self.rid]['EN'][t_init]
         else:
             soc_estimate = self.resource['status'][self.rid]['soc']
@@ -194,7 +192,7 @@ class Agent():
                 processed_data.append(num)
         return processed_data
 
-    def _real_time_offer(self):
+    def _real_time_offer(self, soc_limit):
         initial_soc = self.resource["status"][self.rid]["soc"]
         soc_available = initial_soc - self.socmin
         soc_headroom = self.socmax - initial_soc
@@ -209,7 +207,7 @@ class Agent():
 
         t_end = max(self.market['timestamps'])
         self.logger.debug(f'Last timestamp set to {t_end}')
-        for t in self.market['timestamps']:
+        for t,d in zip(self.market['timestamps'], self.market['durations']):
             block_ch_mq[t] = []
             block_ch_mc[t] = []
             block_dc_mq[t] = []
@@ -235,26 +233,26 @@ class Agent():
             for i,order in enumerate(en_ledger):
                 self.logger.debug(f'{t}: looking into order {i+1}: {order}')
                 mq, mc = order
-                if -soc_headroom <= mq * 5/60 < 0:
-                    soc_available += mq * self.efficiency * 5/60
-                    soc_headroom -= mq * self.efficiency * 5/60
+                if -soc_headroom <= mq * d/60 < 0:
+                    soc_available += mq * self.efficiency * d/60
+                    soc_headroom -= mq * self.efficiency * d/60
                     # block_ch_mq[t].append(-mq)
                     # block_ch_mc[t].append(mc)
                     # self.logger.info(f"added ({-mq},${mc}) to charge cost curve, best price is {best_ch_price}")
                     best_ch_price = min(best_ch_price, mc)
-                elif 0 < mq * 5/60 <= soc_available:
-                    soc_available -= mq * 5/60
-                    soc_headroom += mq * 5/60
+                elif 0 < mq * d/60 <= soc_available:
+                    soc_available -= mq * d/60
+                    soc_headroom += mq * d/60
                     # block_dc_mq[t].append(mq)
                     # block_dc_mc[t].append(mc)
                     # self.logger.info(f"added ({mq},${mc}) to discharge cost curve")
                     best_dc_price = max(best_dc_price, mc)
-                elif mq * 5/60 < -soc_headroom:
+                elif mq * d/60 < -soc_headroom:
                     self.logger.warning(f"Period {t}: Scheduled charge exceeds SoC headroom. Setting headroom to zero and available to max. ")
                     soc_headroom = 0
                     soc_available = self.socmax - self.socmin
                     best_ch_price = min(best_ch_price, mc)
-                elif mq * 5/60 >soc_available:
+                elif mq * d/60 >soc_available:
                     self.logger.warning(f"Period {t}: Scheduled discharge exceeds SoC available. Setting available to zero and headroom to max. ")
                     soc_headroom = self.socmax - self.socmin
                     soc_available = 0
@@ -305,13 +303,13 @@ class Agent():
         self.logger.info(f"{remaining_capacity} MWh available at end of horizon. Allocating value...")
         for mq, mc in post_market_sorted:
             # if discharging in the future
-            if 0 < mq * 5/60 <= remaining_capacity:
+            if 0 < mq * d/60 <= remaining_capacity:
                 self.logger.debug(f"post horizon SoC quantity {mq} valued at {mc}.")
-                remaining_capacity -= mq * 5/60
+                remaining_capacity -= mq * d/60
                 soc_mq.append(mq)
                 soc_mc.append(mc)
             # discharge exhausts remaining capacity
-            elif 0 < remaining_capacity < mq * 5/60:
+            elif 0 < remaining_capacity < mq * d/60:
                 remaining_capacity = 0
                 soc_mq.append(remaining_capacity)
                 soc_mc.append(mc)
@@ -335,17 +333,21 @@ class Agent():
         soc_offer = self.binner.collate(soc_mq, soc_mc)
         block_soc_mq[t_end] = soc_offer[0]
         block_soc_mc[t_end] = soc_offer[1]
+        end_soc = sum(block_soc_mq[t_end])
         self.logger.info(f"Binned SoC offer has {len(soc_offer[0])} elements")
         self.logger.debug(f"binned soc quantities are {soc_offer[0]}")
         self.logger.debug(f"binned soc prices are {soc_offer[1]}")
 
         # Package the dictionaries into an output formatted dictionary
         offer_out_dict = {self.rid: {}}
-        offer_out_dict[self.rid] = {"block_ch_mc": block_ch_mc, "block_ch_mq": block_ch_mq, "block_dc_mc": block_dc_mc,
-                               "block_dc_mq": block_dc_mq, "block_soc_mc": block_soc_mc, "block_soc_mq": block_soc_mq}
+        if soc_limit == 'soft':
+            offer_out_dict[self.rid] = {"block_ch_mc": block_ch_mc, "block_ch_mq": block_ch_mq, "block_dc_mc": block_dc_mc,
+                                   "block_dc_mq": block_dc_mq, "block_soc_mc": block_soc_mc, "block_soc_mq": block_soc_mq}
+            offer_out_dict[self.rid].update(self._default_offer_constants(bid_soc=True))
+        elif soc_limit == 'hard':
+            offer_out_dict[self.rid].update(self._default_offer_constants(end_soc=end_soc))
         offer_out_dict[self.rid].update(self._default_reserve_offer())
         offer_out_dict[self.rid].update(self._default_dispatch_capacity())
-        offer_out_dict[self.rid].update(self._default_offer_constants(bid_soc=True))
 
         return offer_out_dict
 
