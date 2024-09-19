@@ -252,7 +252,7 @@ class Agent():
                     soc_headroom = 0
                     soc_available = self.socmax - self.socmin
                     best_ch_price = min(best_ch_price, mc)
-                elif mq * d/60 >soc_available:
+                elif mq * d/60 > soc_available:
                     self.logger.warning(f"Period {t}: Scheduled discharge exceeds SoC available. Setting available to zero and headroom to max. ")
                     soc_headroom = self.socmax - self.socmin
                     soc_available = 0
@@ -265,7 +265,10 @@ class Agent():
                 if soc_headroom < 0:
                     self.logger.warning(f"Scheduled energy flows result in SoC above max in {t}")
 
-        # valuation of post-market SoC
+        # Projected SoC at end of market horizon. This will be used for the hard SoC target
+        end_soc = self.socmin + soc_available
+
+        # Valuation of post-market SoC. This will be used for the soft SoC target.
         post_market_ledger = {t: order for t, order in self.resource['ledger'][self.rid]['EN'].items() if t > t_end}
         self.logger.debug(f"ledger includes {len(post_market_ledger)} additional time periods")
         for t, order in post_market_ledger.items():
@@ -333,7 +336,6 @@ class Agent():
         soc_offer = self.binner.collate(soc_mq, soc_mc)
         block_soc_mq[t_end] = soc_offer[0]
         block_soc_mc[t_end] = soc_offer[1]
-        end_soc = sum(block_soc_mq[t_end])
         self.logger.info(f"Binned SoC offer has {len(soc_offer[0])} elements")
         self.logger.debug(f"binned soc quantities are {soc_offer[0]}")
         self.logger.debug(f"binned soc prices are {soc_offer[1]}")
