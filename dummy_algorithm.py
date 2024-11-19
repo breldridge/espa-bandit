@@ -192,7 +192,7 @@ class Agent():
                 processed_data.append(num)
         return processed_data
 
-    def _real_time_offer(self, soc_limit):
+    def _real_time_offer(self, soc_soft_limit):
         initial_soc = self.resource["status"][self.rid]["soc"]
         soc_available = initial_soc - self.socmin
         soc_headroom = self.socmax - initial_soc
@@ -342,11 +342,11 @@ class Agent():
 
         # Package the dictionaries into an output formatted dictionary
         offer_out_dict = {self.rid: {}}
-        if soc_limit == 'soft':
+        if soc_soft_limit:
             offer_out_dict[self.rid] = {"block_ch_mc": block_ch_mc, "block_ch_mq": block_ch_mq, "block_dc_mc": block_dc_mc,
                                    "block_dc_mq": block_dc_mq, "block_soc_mc": block_soc_mc, "block_soc_mq": block_soc_mq}
             offer_out_dict[self.rid].update(self._default_offer_constants(bid_soc=True))
-        elif soc_limit == 'hard':
+        else:
             offer_out_dict[self.rid].update(self._default_offer_constants(end_soc=end_soc))
         offer_out_dict[self.rid].update(self._default_reserve_offer())
         offer_out_dict[self.rid].update(self._default_dispatch_capacity())
