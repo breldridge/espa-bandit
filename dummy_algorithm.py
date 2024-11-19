@@ -309,13 +309,13 @@ class Agent():
             if 0 < mq * d/60 <= remaining_capacity:
                 self.logger.debug(f"post horizon SoC quantity {mq} valued at {mc}.")
                 remaining_capacity -= mq * d/60
-                soc_mq.append(mq)
-                soc_mc.append(mc)
+                soc_mq.append(mq * d/60)
+                soc_mc.append(-mc)
             # discharge exhausts remaining capacity
             elif 0 < remaining_capacity < mq * d/60:
                 remaining_capacity = 0
                 soc_mq.append(remaining_capacity)
-                soc_mc.append(mc)
+                soc_mc.append(-mc)
             # skip if no capacity is left
             elif remaining_capacity < 1e-2:
                 break
